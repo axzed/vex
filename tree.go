@@ -16,18 +16,21 @@ func (t *treeNode) Put(path string) {
 	root := t
 	strs := strings.Split(path, "/")
 	for index, name := range strs {
+		// ignore the prefix "_" before the first "/"
 		if index == 0 {
 			continue
 		}
 		children := t.children
 		isMatch := false
 		for _, node := range children {
+			// if match the url get to the next node
 			if node.name == name {
 				isMatch = true
 				t = node
 				break
 			}
 		}
+		// if not match generate the node to save the name of url
 		if !isMatch {
 			node := &treeNode{name: name, children: make([]*treeNode, 0)}
 			children = append(children, node)
@@ -35,6 +38,7 @@ func (t *treeNode) Put(path string) {
 			t = node
 		}
 	}
+	// back to root
 	t = root
 }
 
