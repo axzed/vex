@@ -10,38 +10,46 @@ import (
 	"net/http"
 )
 
+// ANY is the other name of "ANY" means url use ANY method
+const ANY = "ANY"
+
 // HandleFunc defines the handler used by vex middleware as return value.
-type HandleFunc func(w http.ResponseWriter, r *http.Request)
+// Context is the wrap of (w *http.ResponseWriter, r http.Request)
+type HandleFunc func(ctx *Context)
 
 // Routing groups
 type routerGroup struct {
-	name             string                // Router group's name
-	handleFuncMap    map[string]HandleFunc // Each routing group's handler's function
-	handlerMethodMap map[string][]string   // Support different request methods && its urls (store different request method type)
+	name             string                           // Router group's name
+	handleFuncMap    map[string]map[string]HandleFunc // Each routing group's handler's function
+	handlerMethodMap map[string][]string              // Support different request methods && its urls (store different request method type)
 }
 
-// Add routers in a same group
-// name is router's related paths, handleFunc is the function to process the corresponding route
-func (r *routerGroup) Add(name string, handleFunc HandleFunc) {
-	r.handleFuncMap[name] = handleFunc
+// handle use this function to set the HandleFunc of the mapping url
+func (r *routerGroup) handle(name string, method string, handleFunc HandleFunc) {
+	_, ok := r.handleFuncMap[name]
+	if !ok {
+		r.handleFuncMap[name] = make(map[string]HandleFunc)
+	}
+	_, ok = r.handleFuncMap[name][method]
+	if ok {
+		panic("With duplicate routes")
+	}
+	r.handleFuncMap[name][method] = handleFunc
 }
 
 //	Any Get Post Put Delete is restful api
 //
 // Any is a method support any type of request to our router
 func (r *routerGroup) Any(name string, handleFunc HandleFunc) {
-	r.handleFuncMap[name] = handleFunc
-	r.handlerMethodMap["ANY"] = append(r.handlerMethodMap["ANY"], name)
+	r.handle(name, ANY, handleFunc)
 }
 
 func (r *routerGroup) Get(name string, handleFunc HandleFunc) {
-	r.handleFuncMap[name] = handleFunc
-	r.handlerMethodMap[http.MethodGet] = append(r.handlerMethodMap[http.MethodGet], name)
+	r.handle(name, http.MethodGet, handleFunc)
 }
 
 func (r *routerGroup) Post(name string, handleFunc HandleFunc) {
-	r.handleFuncMap[name] = handleFunc
-	r.handlerMethodMap[http.MethodPost] = append(r.handlerMethodMap[http.MethodPost], name)
+	r.handle(name, http.MethodPost, handleFunc)
 }
 
 // router defines a routerGroup's slice info
@@ -50,10 +58,12 @@ type router struct {
 }
 
 // Group grouping the routes
+// initialize the routerGroups by using the Group function
+// take the routerGroup to manipulate the url
 func (r *router) Group(name string) *routerGroup {
 	routerGroup := &routerGroup{
 		name:             name,
-		handleFuncMap:    make(map[string]HandleFunc),
+		handleFuncMap:    make(map[string]map[string]HandleFunc),
 		handlerMethodMap: make(map[string][]string),
 	}
 	r.routerGroups = append(r.routerGroups, routerGroup)
@@ -79,25 +89,19 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			url := group.name + name
 			// url match
 			if r.RequestURI == url {
-				routers, ok := group.handlerMethodMap["ANY"]
-				if ok {
-					// handle router
-					for _, routerName := range routers {
-						if routerName == name {
-							methodHandle(w, r)
-							return
-						}
-					}
+				ctx := &Context{
+					W: w,
+					R: r,
 				}
-				// method compare
-				routers, ok = group.handlerMethodMap[method]
+				handle, ok := methodHandle[ANY]
 				if ok {
-					for _, routerName := range routers {
-						if routerName == name {
-							methodHandle(w, r)
-							return
-						}
-					}
+					handle(ctx)
+					return
+				}
+				handle, ok = methodHandle[method]
+				if ok {
+					handle(ctx)
+					return
 				}
 				// url matched but not in a correct method return 405
 				w.WriteHeader(http.StatusMethodNotAllowed)
