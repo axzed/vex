@@ -54,6 +54,26 @@ func (r *routerGroup) Post(name string, handleFunc HandleFunc) {
 	r.handle(name, http.MethodPost, handleFunc)
 }
 
+func (r *routerGroup) Delete(name string, handleFunc HandleFunc) {
+	r.handle(name, http.MethodDelete, handleFunc)
+}
+
+func (r *routerGroup) Put(name string, handleFunc HandleFunc) {
+	r.handle(name, http.MethodPut, handleFunc)
+}
+
+func (r *routerGroup) Patch(name string, handleFunc HandleFunc) {
+	r.handle(name, http.MethodPatch, handleFunc)
+}
+
+func (r *routerGroup) Options(name string, handleFunc HandleFunc) {
+	r.handle(name, http.MethodOptions, handleFunc)
+}
+
+func (r *routerGroup) Head(name string, handleFunc HandleFunc) {
+	r.handle(name, http.MethodHead, handleFunc)
+}
+
 // router defines a routerGroup's slice info
 type router struct {
 	routerGroups []*routerGroup // router's group
