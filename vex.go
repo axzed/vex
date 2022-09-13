@@ -93,7 +93,10 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// node has all routerName match to change the dynamic url like :id ---> 1
 		node := group.treeNode.Get(routerName)
 		// match
-		if node != nil {
+		// node.isEnd means this tree node is at the end of url
+		// ps: if node is end of url then you url has not in a same method, so return 405
+		// ps: if node is not the end means this node is not the end you need to return 404
+		if node != nil && node.isEnd {
 			ctx := &Context{
 				W: w,
 				R: r,

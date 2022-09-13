@@ -10,6 +10,7 @@ type treeNode struct {
 	name       string
 	children   []*treeNode
 	routerName string
+	isEnd      bool
 }
 
 // put path: /user/get/:id
@@ -33,7 +34,11 @@ func (t *treeNode) Put(path string) {
 		}
 		// if not match generate the node to save the name of url
 		if !isMatch {
-			node := &treeNode{name: name, children: make([]*treeNode, 0)}
+			isEnd := false
+			if index == len(strs)-1 {
+				isEnd = true
+			}
+			node := &treeNode{name: name, children: make([]*treeNode, 0), isEnd: isEnd}
 			children = append(children, node)
 			t.children = children
 			t = node
@@ -70,6 +75,8 @@ func (t *treeNode) Get(path string) *treeNode {
 		if !isMatch {
 			for _, node := range children {
 				if node.name == "**" {
+					routerName += "/" + node.name
+					node.routerName = routerName
 					return node
 				}
 			}
