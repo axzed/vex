@@ -22,6 +22,7 @@ type routerGroup struct {
 	name             string                           // Router group's name
 	handleFuncMap    map[string]map[string]HandleFunc // Each routing group's handler's function
 	handlerMethodMap map[string][]string              // Support different request methods && its urls (store different request method type)
+	treeNode         *treeNode
 }
 
 // handle use this function to set the HandleFunc of the mapping url
@@ -35,6 +36,7 @@ func (r *routerGroup) handle(name string, method string, handleFunc HandleFunc) 
 		panic("With duplicate routes")
 	}
 	r.handleFuncMap[name][method] = handleFunc
+	r.treeNode.Put(name)
 }
 
 //	Any Get Post Put Delete is restful api
@@ -65,6 +67,7 @@ func (r *router) Group(name string) *routerGroup {
 		name:             name,
 		handleFuncMap:    make(map[string]map[string]HandleFunc),
 		handlerMethodMap: make(map[string][]string),
+		treeNode:         &treeNode{name: "/", children: make([]*treeNode, 0)},
 	}
 	r.routerGroups = append(r.routerGroups, routerGroup)
 	return routerGroup
@@ -85,30 +88,38 @@ func New() *Engine {
 func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	method := r.Method
 	for _, group := range e.routerGroups {
-		for name, methodHandle := range group.handleFuncMap {
-			url := group.name + name
-			// url match
-			if r.RequestURI == url {
-				ctx := &Context{
-					W: w,
-					R: r,
-				}
-				handle, ok := methodHandle[ANY]
-				if ok {
-					handle(ctx)
-					return
-				}
-				handle, ok = methodHandle[method]
-				if ok {
-					handle(ctx)
-					return
-				}
-				// url matched but not in a correct method return 405
-				w.WriteHeader(http.StatusMethodNotAllowed)
-				fmt.Fprintf(w, "%s %s not allowed\n", r.RequestURI, method)
+		routerName := SubStringLast(r.RequestURI, group.name)
+		// get/1
+		// node has all routerName match to change the dynamic url like :id ---> 1
+		node := group.treeNode.Get(routerName)
+		// match
+		if node != nil {
+			ctx := &Context{
+				W: w,
+				R: r,
+			}
+			handle, ok := group.handleFuncMap[node.routerName][ANY]
+			if ok {
+				handle(ctx)
 				return
 			}
+			handle, ok = group.handleFuncMap[node.routerName][method]
+			if ok {
+				handle(ctx)
+				return
+			}
+			// url matched but not in a correct method return 405
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			fmt.Fprintf(w, "%s %s not allowed\n", r.RequestURI, method)
+			return
 		}
+		//for name, methodHandle := range group.handleFuncMap {
+		//	url := group.name + name
+		//	// url match
+		//	if r.RequestURI == url {
+		//
+		//	}
+		//}
 	}
 	// if url is not match return 404
 	w.WriteHeader(http.StatusNotFound)
