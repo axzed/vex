@@ -6,6 +6,7 @@ import (
 )
 
 func TestTreeNode(t *testing.T) {
+	// this is a test of prefix tree to match the routes you add.
 	root := &treeNode{name: "/", children: make([]*treeNode, 0)}
 
 	root.Put("/user/get/:id")
