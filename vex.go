@@ -86,30 +86,37 @@ func (r *routerGroup) Any(name string, handleFunc HandleFunc, middlewareFunc ...
 	r.handle(name, ANY, handleFunc, middlewareFunc...)
 }
 
+// Get restful api
 func (r *routerGroup) Get(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodGet, handleFunc, middlewareFunc...)
 }
 
+// Post restful api
 func (r *routerGroup) Post(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodPost, handleFunc, middlewareFunc...)
 }
 
+// Delete restful api
 func (r *routerGroup) Delete(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodDelete, handleFunc, middlewareFunc...)
 }
 
+// Put restful api
 func (r *routerGroup) Put(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodPut, handleFunc, middlewareFunc...)
 }
 
+// Patch restful api
 func (r *routerGroup) Patch(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodPatch, handleFunc, middlewareFunc...)
 }
 
+// Options restful api
 func (r *routerGroup) Options(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodOptions, handleFunc, middlewareFunc...)
 }
 
+// Head restful api
 func (r *routerGroup) Head(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodHead, handleFunc, middlewareFunc...)
 }
