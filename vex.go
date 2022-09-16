@@ -6,6 +6,8 @@ package vex
 
 import (
 	"fmt"
+	"github.com/axzed/vex/render"
+	"html/template"
 	"log"
 	"net/http"
 )
@@ -145,11 +147,32 @@ func (r *router) Group(name string) *routerGroup {
 // Create an instance of Engine, by using New() or Default().
 type Engine struct {
 	router
+	funcMap    template.FuncMap
+	HTMLRender render.HTMLRender
 }
 
 // New returns a new blank Engine instance without any middleware attached.
 func New() *Engine {
-	return &Engine{}
+	return &Engine{
+		router: router{},
+	}
+}
+
+// SetFuncMap
+// SetHTMLTemplate
+// LoadHTMLTemplate
+// These three function is to render the html template files in memory
+func (e *Engine) SetFuncMap(funcMap template.FuncMap) {
+	e.funcMap = funcMap
+}
+
+func (e *Engine) SetHTMLTemplate(t *template.Template) {
+	e.HTMLRender = render.HTMLRender{Template: t}
+}
+
+func (e *Engine) LoadHTMLTemplate(pattern string) {
+	t := template.Must(template.New("").Funcs(e.funcMap).ParseGlob(pattern))
+	e.SetHTMLTemplate(t)
 }
 
 // implement the interface method ServeHTTP
@@ -171,8 +194,9 @@ func (e *Engine) httpRequestHandle(w http.ResponseWriter, r *http.Request) {
 		// ps: if node is not the end means this node is not the end you need to return 404
 		if node != nil && node.isEnd {
 			ctx := &Context{
-				W: w,
-				R: r,
+				W:      w,
+				R:      r,
+				engine: e,
 			}
 			handle, ok := group.handleFuncMap[node.routerName][ANY]
 			if ok {
