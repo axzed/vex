@@ -1,6 +1,9 @@
 package vex
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 func SubStringLast(str string, substr string) string {
 	index := strings.Index(str, substr)
@@ -8,4 +11,14 @@ func SubStringLast(str string, substr string) string {
 		return ""
 	}
 	return str[index+len(substr):]
+}
+
+// judge the character is or not in ASCII
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] > unicode.MaxASCII {
+			return false
+		}
+	}
+	return true
 }

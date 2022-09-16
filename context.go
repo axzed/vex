@@ -9,6 +9,7 @@ import (
 	"encoding/xml"
 	"html/template"
 	"net/http"
+	"net/url"
 )
 
 // Context is the most important part of gin. It allows us to pass variables between middleware,
@@ -83,4 +84,31 @@ func (c *Context) XML(status int, data any) error {
 	c.W.WriteHeader(status)
 	err := xml.NewEncoder(c.W).Encode(data)
 	return err
+}
+
+// File writes the specified file into the body stream in an efficient way.
+func (c *Context) File(fileName string) {
+	http.ServeFile(c.W, c.R, fileName)
+}
+
+// FileAttachment writes the specified file into the body stream in an efficient way
+// On the client side, the file will typically be downloaded with the given filename
+func (c *Context) FileAttachment(filepath, filename string) {
+	if isASCII(filename) {
+		c.W.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	} else {
+		c.W.Header().Set("Content-Disposition", `attachment; filename*=UTF-8''`+url.QueryEscape(filename))
+	}
+	http.ServeFile(c.W, c.R, filepath)
+}
+
+// FileFromFS writes the specified file from http.FileSystem into the body stream in an efficient way.
+func (c *Context) FileFromFS(filepath string, fs http.FileSystem) {
+	defer func(old string) {
+		c.R.URL.Path = old
+	}(c.R.URL.Path)
+
+	c.R.URL.Path = filepath
+
+	http.FileServer(fs).ServeHTTP(c.W, c.R)
 }
