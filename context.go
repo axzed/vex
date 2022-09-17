@@ -5,8 +5,7 @@
 package vex
 
 import (
-	"encoding/json"
-	"encoding/xml"
+	"github.com/axzed/vex/render"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -23,11 +22,10 @@ type Context struct {
 // HTML Render the HTML files to request
 // it return pure HTML files, don't need any data
 func (c *Context) HTML(status int, html string) error {
-	// Default status 200
-	c.W.Header().Set("Content-Type", "text/html; charset=utf-8")
-	c.W.WriteHeader(status)
-	_, err := c.W.Write([]byte(html))
-	return err
+	return c.Render(status, &render.HTML{
+		Data:       html,
+		IsTemplate: false,
+	})
 }
 
 // HTMLTemplate is the function to render the HTML Template
@@ -59,31 +57,26 @@ func (c *Context) HTMLTemplateGlob(name string, data any, pattern string) error 
 
 // Template set the content to the memory and load all HTML template files to system
 func (c *Context) Template(name string, data any) error {
-	c.W.Header().Set("Content-Type", "text/html; charset=utf-8")
-	err := c.engine.HTMLRender.Template.ExecuteTemplate(c.W, name, data)
-	return err
+	return c.Render(http.StatusOK, &render.HTML{
+		Data:       data,
+		IsTemplate: true,
+		Template:   c.engine.HTMLRender.Template,
+		Name:       name,
+	})
 }
 
 // JSON serializes the given struct as JSON into the response body.
 // It also sets the Content-Type as "application/json".
 func (c *Context) JSON(status int, data any) error {
-	c.W.Header().Set("Content-Type", "application/json; charset=utf-8")
-	c.W.WriteHeader(status)
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	_, err = c.W.Write(jsonData)
-	return err
+	return c.Render(status, &render.JSON{Data: data})
 }
 
 // XML serializes the given struct as XML into the response body.
 // It also sets the Content-Type as "application/xml".
 func (c *Context) XML(status int, data any) error {
-	c.W.Header().Set("Content-Type", "application/xml; charset=utf-8")
-	c.W.WriteHeader(status)
-	err := xml.NewEncoder(c.W).Encode(data)
-	return err
+	return c.Render(status, &render.XML{
+		Data: data,
+	})
 }
 
 // File writes the specified file into the body stream in an efficient way.
@@ -111,4 +104,23 @@ func (c *Context) FileFromFS(filepath string, fs http.FileSystem) {
 	c.R.URL.Path = filepath
 
 	http.FileServer(fs).ServeHTTP(c.W, c.R)
+}
+
+func (c *Context) Redirect(status int, url string) error {
+	return c.Render(status, &render.Redirect{
+		Code:     status,
+		Request:  c.R,
+		Location: url,
+	})
+}
+
+// String return c.String()
+func (c *Context) String(status int, format string, values ...any) error {
+	return c.Render(status, &render.String{Format: format, Data: values})
+}
+
+func (c *Context) Render(statusCode int, r render.Render) error {
+	err := r.Render(c.W)
+	c.W.WriteHeader(statusCode)
+	return err
 }
