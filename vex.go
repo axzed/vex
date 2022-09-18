@@ -84,42 +84,42 @@ func (r *routerGroup) handle(name string, method string, handleFunc HandleFunc, 
 
 // Any Get Post Put Delete is restful api
 // Any is a method support any type of request to our router
-func (r *routerGroup) Any(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
+func (r *routerGroup) ANY(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, ANY, handleFunc, middlewareFunc...)
 }
 
 // Get restful api
-func (r *routerGroup) Get(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
+func (r *routerGroup) GET(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodGet, handleFunc, middlewareFunc...)
 }
 
 // Post restful api
-func (r *routerGroup) Post(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
+func (r *routerGroup) POST(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodPost, handleFunc, middlewareFunc...)
 }
 
 // Delete restful api
-func (r *routerGroup) Delete(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
+func (r *routerGroup) DELETE(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodDelete, handleFunc, middlewareFunc...)
 }
 
 // Put restful api
-func (r *routerGroup) Put(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
+func (r *routerGroup) PUT(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodPut, handleFunc, middlewareFunc...)
 }
 
 // Patch restful api
-func (r *routerGroup) Patch(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
+func (r *routerGroup) PATCH(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodPatch, handleFunc, middlewareFunc...)
 }
 
 // Options restful api
-func (r *routerGroup) Options(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
+func (r *routerGroup) OPTION(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodOptions, handleFunc, middlewareFunc...)
 }
 
 // Head restful api
-func (r *routerGroup) Head(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
+func (r *routerGroup) HEAD(name string, handleFunc HandleFunc, middlewareFunc ...MiddlewareFunc) {
 	r.handle(name, http.MethodHead, handleFunc, middlewareFunc...)
 }
 
