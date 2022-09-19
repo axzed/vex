@@ -14,9 +14,50 @@ import (
 // Context is the most important part of gin. It allows us to pass variables between middleware,
 // manage the flow, validate the JSON of a request and render a JSON response for example
 type Context struct {
-	W      http.ResponseWriter
-	R      *http.Request
-	engine *Engine
+	W          http.ResponseWriter // response
+	R          *http.Request       // request
+	engine     *Engine             // Context's engine
+	queryCache url.Values          // handle the query of url
+}
+
+// initQueryCache get the query param in request url
+func (c *Context) initQueryCache() {
+	if c.queryCache == nil {
+		if c.R != nil {
+			c.queryCache = c.R.URL.Query()
+		} else {
+			c.queryCache = url.Values{}
+		}
+	}
+}
+
+// DefaultQuery if you have not set the key return the default value
+func (c *Context) DefaultQuery(key, defaultValue string) string {
+	values, ok := c.GetAllQuery(key)
+	if !ok {
+		return defaultValue
+	}
+	return values[0]
+}
+
+// GetQuery if url is ?key:value you want to get value by using key
+func (c *Context) GetQuery(key string) string {
+	c.initQueryCache()
+	return c.queryCache.Get(key)
+}
+
+// GetAllQuery if you want to all the url query param by using key like ?id=1&id=2 return [1, 2]
+func (c *Context) GetAllQuery(key string) ([]string, bool) {
+	c.initQueryCache()
+	values, ok := c.queryCache[key]
+	return values, ok
+}
+
+// QueryArray return query param without check
+func (c *Context) QueryArray(key string) (values []string) {
+	c.initQueryCache()
+	values, _ = c.queryCache[key]
+	return values
 }
 
 // HTML Render the HTML files to request

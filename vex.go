@@ -201,7 +201,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (e *Engine) httpRequestHandle(ctx *Context, w http.ResponseWriter, r *http.Request) {
 	method := r.Method
 	for _, group := range e.routerGroups {
-		routerName := SubStringLast(r.RequestURI, group.name)
+		routerName := SubStringLast(r.URL.Path, group.name)
 		// get/1
 		// node has all routerName match to change the dynamic url like :id ---> 1
 		node := group.treeNode.Get(routerName)
