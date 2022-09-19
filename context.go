@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // Context is the most important part of gin. It allows us to pass variables between middleware,
@@ -56,6 +57,33 @@ func (c *Context) QueryArray(key string) (values []string) {
 	c.initQueryCache()
 	values, _ = c.queryCache[key]
 	return values
+}
+
+// get to get the url's mapping param
+func (c *Context) get(cache map[string][]string, key string) (map[string]string, bool) {
+	dicts := make(map[string]string)
+	exist := false
+	for k, value := range cache {
+		if i := strings.IndexByte(k, '['); i >= 1 && k[0:i] == key {
+			if j := strings.IndexByte(k[i+1:], ']'); j >= 1 {
+				exist = true
+				dicts[k[i+1:][:j]] = value[0]
+			}
+		}
+	}
+	return dicts, exist
+}
+
+// GetQueryMap get the mapping
+func (c *Context) GetQueryMap(key string) (map[string]string, bool) {
+	c.initQueryCache()
+	return c.get(c.queryCache, key)
+}
+
+// QueryMap get the query map without check
+func (c *Context) QueryMap(key string) (dicts map[string]string) {
+	dicts, _ = c.GetQueryMap(key)
+	return
 }
 
 // HTML Render the HTML files to request
