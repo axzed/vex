@@ -22,12 +22,10 @@ type Context struct {
 
 // initQueryCache get the query param in request url
 func (c *Context) initQueryCache() {
-	if c.queryCache == nil {
-		if c.R != nil {
-			c.queryCache = c.R.URL.Query()
-		} else {
-			c.queryCache = url.Values{}
-		}
+	if c.R != nil {
+		c.queryCache = c.R.URL.Query()
+	} else {
+		c.queryCache = url.Values{}
 	}
 }
 

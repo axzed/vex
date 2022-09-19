@@ -147,7 +147,7 @@ func (r *router) Group(name string) *routerGroup {
 // Engine is the framework's instance, it contains the muxer, middleware and configuration settings.
 // Create an instance of Engine, by using New() or Default().
 type Engine struct {
-	router
+	*router
 	funcMap    template.FuncMap
 	HTMLRender render.HTMLRender
 	pool       sync.Pool
@@ -155,8 +155,15 @@ type Engine struct {
 
 // New returns a new blank Engine instance without any middleware attached.
 func New() *Engine {
+	// initialize the instance of vex
+	// it contains:
+	// router: the mapping method of url and its handleFunc
+	// funcMap: template function mapping
+	// HTMLRender: render of HTML files
 	engine := &Engine{
-		router: router{},
+		router:     &router{},
+		funcMap:    nil,
+		HTMLRender: render.HTMLRender{},
 	}
 	engine.pool.New = func() any {
 		return engine.allocateContext() // set context into pool to improve efficient
