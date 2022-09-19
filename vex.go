@@ -10,6 +10,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"sync"
 )
 
 // ANY is the other name of "ANY" means url use ANY method
@@ -149,12 +150,24 @@ type Engine struct {
 	router
 	funcMap    template.FuncMap
 	HTMLRender render.HTMLRender
+	pool       sync.Pool
 }
 
 // New returns a new blank Engine instance without any middleware attached.
 func New() *Engine {
-	return &Engine{
+	engine := &Engine{
 		router: router{},
+	}
+	engine.pool.New = func() any {
+		return engine.allocateContext() // set context into pool to improve efficient
+	}
+	return engine
+}
+
+// allocateContext you need to set the attribute of Context into pool, so you need this function to save the method you want to
+func (e *Engine) allocateContext() any {
+	return &Context{
+		engine: e,
 	}
 }
 
@@ -177,11 +190,15 @@ func (e *Engine) LoadHTMLTemplate(pattern string) {
 
 // implement the interface method ServeHTTP
 func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	e.httpRequestHandle(w, r)
+	ctx := e.pool.Get().(*Context)
+	ctx.W = w
+	ctx.R = r
+	e.httpRequestHandle(ctx, w, r)
+	e.pool.Put(ctx)
 }
 
 // httpRequestHandle is a function to handle the router's request
-func (e *Engine) httpRequestHandle(w http.ResponseWriter, r *http.Request) {
+func (e *Engine) httpRequestHandle(ctx *Context, w http.ResponseWriter, r *http.Request) {
 	method := r.Method
 	for _, group := range e.routerGroups {
 		routerName := SubStringLast(r.RequestURI, group.name)
@@ -193,11 +210,6 @@ func (e *Engine) httpRequestHandle(w http.ResponseWriter, r *http.Request) {
 		// ps: if node is end of url then you url has not in a same method, so return 405
 		// ps: if node is not the end means this node is not the end you need to return 404
 		if node != nil && node.isEnd {
-			ctx := &Context{
-				W:      w,
-				R:      r,
-				engine: e,
-			}
 			handle, ok := group.handleFuncMap[node.routerName][ANY]
 			if ok {
 				group.methodHandle(node.routerName, ANY, handle, ctx)
