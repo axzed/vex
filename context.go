@@ -5,12 +5,16 @@
 package vex
 
 import (
+	"errors"
 	"github.com/axzed/vex/render"
 	"html/template"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
 )
+
+var defaultMaxMemory = 32 << 20 // 32M
 
 // Context is the most important part of gin. It allows us to pass variables between middleware,
 // manage the flow, validate the JSON of a request and render a JSON response for example
@@ -19,6 +23,7 @@ type Context struct {
 	R          *http.Request       // request
 	engine     *Engine             // Context's engine
 	queryCache url.Values          // handle the query of url
+	formCache  url.Values          // handle the query by HTML post
 }
 
 // initQueryCache get the query param in request url
@@ -83,6 +88,56 @@ func (c *Context) GetQueryMap(key string) (map[string]string, bool) {
 // QueryMap get the query map without check
 func (c *Context) QueryMap(key string) (dicts map[string]string) {
 	dicts, _ = c.GetQueryMap(key)
+	return
+}
+
+// initPostFormCache init the post form param
+func (c *Context) initPostFormCache() {
+	if c.R != nil {
+		err := c.R.ParseMultipartForm(int64(defaultMaxMemory))
+		if err != nil {
+			if errors.Is(err, http.ErrNotMultipart) {
+				log.Println(err)
+			}
+		}
+		c.formCache = c.R.PostForm
+	} else {
+		c.formCache = url.Values{}
+	}
+}
+
+// GetPostArray get the post form data list
+func (c *Context) GetPostArray(key string) (values []string, ok bool) {
+	c.initPostFormCache()
+	values, ok = c.formCache[key]
+	return
+}
+
+// GetPostArray get the post form data list without check
+func (c *Context) PostArray(key string) (values []string) {
+	values, _ = c.GetPostArray(key)
+	return
+}
+
+// GetPost get the post form data
+func (c *Context) GetPost(key string) (string, bool) {
+	values, ok := c.GetPostArray(key)
+	if ok {
+		return values[0], ok
+	}
+	return "", false
+}
+
+// Get the post form's map
+// GetPostMap get the post form map
+func (c *Context) GetPostMap(key string) (map[string]string, bool) {
+	c.initQueryCache()
+	return c.get(c.formCache, key)
+}
+
+// PostMap get the post form map without check
+func (c *Context) PostMap(key string) (dicts map[string]string) {
+	dicts, _ = c.GetPostMap(key)
 	return
 }
 
