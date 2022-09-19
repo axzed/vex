@@ -188,6 +188,8 @@ func (c *Context) String(status int, format string, values ...any) error {
 
 func (c *Context) Render(statusCode int, r render.Render) error {
 	err := r.Render(c.W)
-	c.W.WriteHeader(statusCode)
+	if statusCode != http.StatusOK {
+		c.W.WriteHeader(statusCode)
+	}
 	return err
 }
