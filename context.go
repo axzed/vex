@@ -5,7 +5,9 @@
 package vex
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/axzed/vex/render"
 	"html/template"
 	"io"
@@ -14,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 )
 
@@ -22,11 +25,13 @@ var defaultMaxMemory = 32 << 20 // 32M
 // Context is the most important part of gin. It allows us to pass variables between middleware,
 // manage the flow, validate the JSON of a request and render a JSON response for example
 type Context struct {
-	W          http.ResponseWriter // response
-	R          *http.Request       // request
-	engine     *Engine             // Context's engine
-	queryCache url.Values          // handle the query of url
-	formCache  url.Values          // handle the query by HTML post
+	W                     http.ResponseWriter // response
+	R                     *http.Request       // request
+	engine                *Engine             // Context's engine
+	queryCache            url.Values          // handle the query of url
+	formCache             url.Values          // handle the query by HTML post
+	DisallowUnknownFields bool                // control the json fields in json
+	IsValid               bool                // control the json valid
 }
 
 // initQueryCache get the query param in request url
@@ -188,6 +193,7 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error
 	return err
 }
 
+// MultipartForm handle multi files int request
 func (c *Context) MultipartForm() (*multipart.Form, error) {
 	err := c.R.ParseMultipartForm(int64(defaultMaxMemory))
 	return c.R.MultipartForm, err
@@ -299,4 +305,63 @@ func (c *Context) Render(statusCode int, r render.Render) error {
 		c.W.WriteHeader(statusCode)
 	}
 	return err
+}
+
+// DealJson is a method handle the json param
+// any means interface{}
+func (c *Context) DealJson(obj any) error {
+	// POST param in the body
+	body := c.R.Body
+	if body == nil {
+		return errors.New("invalid request!!!")
+	}
+	decoder := json.NewDecoder(body)
+	// if you have unknown fields in request param json, this will handle it
+	if c.DisallowUnknownFields {
+		decoder.DisallowUnknownFields()
+	}
+	if c.IsValid {
+		err := validateParam(obj, decoder)
+		if err != nil {
+			return err
+		}
+	} else {
+		return decoder.Decode(obj)
+	}
+	return nil
+}
+
+func validateParam(obj any, decoder *json.Decoder) error {
+	// parse to map, then compare by key of map and struct
+	// judge type by reflect
+	valueOf := reflect.ValueOf(obj)
+	// IsPointer ?
+	if valueOf.Kind() != reflect.Pointer {
+		return errors.New("This argumet must have a pointer type")
+	}
+	elem := valueOf.Elem().Interface()
+	of := reflect.ValueOf(elem)
+	switch of.Kind() {
+	case reflect.Struct:
+		mapValue := make(map[string]interface{})
+		_ = decoder.Decode(&mapValue)
+		for i := 0; i < of.NumField(); i++ {
+			field := of.Type().Field(i)
+			name := field.Name
+			// get the json name by json tag and key
+			jsonName := field.Tag.Get("json")
+			if jsonName != "" {
+				name = jsonName
+			}
+			value := mapValue[name]
+			if value == nil {
+				return errors.New(fmt.Sprintf("filed [%s] is not exist", jsonName))
+			}
+		}
+		b, _ := json.Marshal(mapValue)
+		_ = json.Unmarshal(b, obj)
+	default:
+		_ = decoder.Decode(obj)
+	}
+	return nil
 }
