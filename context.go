@@ -8,9 +8,12 @@ import (
 	"errors"
 	"github.com/axzed/vex/render"
 	"html/template"
+	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -139,6 +142,55 @@ func (c *Context) GetPostMap(key string) (map[string]string, bool) {
 func (c *Context) PostMap(key string) (dicts map[string]string) {
 	dicts, _ = c.GetPostMap(key)
 	return
+}
+
+// FormFile get the param of file
+func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
+	req := c.R
+	if err := req.ParseMultipartForm(int64(defaultMaxMemory)); err != nil {
+		return nil, err
+	}
+	file, header, err := req.FormFile(name)
+	if err != nil {
+		return nil, err
+	}
+	err = file.Close()
+	if err != nil {
+		return nil, err
+	}
+	return header, nil
+}
+
+// FormFiles get the param of files
+func (c *Context) FormFiles(name string) []*multipart.FileHeader {
+	multipartForm, err := c.MultipartForm()
+	if err != nil {
+		return make([]*multipart.FileHeader, 0)
+	}
+	return multipartForm.File[name]
+}
+
+// SaveUploadedFile more useful save file function
+func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error {
+	src, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, src)
+	return err
+}
+
+func (c *Context) MultipartForm() (*multipart.Form, error) {
+	err := c.R.ParseMultipartForm(int64(defaultMaxMemory))
+	return c.R.MultipartForm, err
 }
 
 // HTML Render the HTML files to request
