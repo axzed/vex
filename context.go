@@ -331,6 +331,7 @@ func (c *Context) DealJson(obj any) error {
 	return nil
 }
 
+// validateParam check the json param's validation
 func validateParam(obj any, decoder *json.Decoder) error {
 	// parse to map, then compare by key of map and struct
 	// judge type by reflect
@@ -353,9 +354,11 @@ func validateParam(obj any, decoder *json.Decoder) error {
 			if jsonName != "" {
 				name = jsonName
 			}
+			// self define the tag about vex framework
+			required := field.Tag.Get("vex")
 			value := mapValue[name]
-			if value == nil {
-				return errors.New(fmt.Sprintf("filed [%s] is not exist", jsonName))
+			if value == nil && required == "required" {
+				return errors.New(fmt.Sprintf("filed [%s] is not exist, because [%s] is required", jsonName, jsonName))
 			}
 		}
 		b, _ := json.Marshal(mapValue)
