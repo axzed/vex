@@ -382,6 +382,7 @@ func validate(obj any) error {
 	return nil
 }
 
+// validateStruct is a method to handle the struct json param using validator utils
 func validateStruct(obj any) error {
 	return validator.New().Struct(obj)
 }
