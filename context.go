@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/axzed/vex/render"
-	"github.com/go-playground/validator/v10"
 	"html/template"
 	"io"
 	"log"
@@ -335,56 +334,9 @@ func (c *Context) DealJson(obj any) error {
 	return validate(obj)
 }
 
-// SliceValidationError handle the error you create in the validator
-type SliceValidationError []error
-
-// if you have multiple error let them switch line
-func (err SliceValidationError) Error() string {
-	n := len(err)
-	switch n {
-	case 0:
-		return ""
-	default:
-		var b strings.Builder
-		if err[0] != nil {
-			fmt.Fprintf(&b, "[%d]: %s", 0, err[0].Error())
-		}
-		if n > 1 {
-			for i := 0; i < n; i++ {
-				if err[i] != nil {
-					b.WriteString("\n")
-					fmt.Fprintf(&b, "[%d]: %s", i, err[i].Error())
-				}
-			}
-		}
-		return b.String()
-	}
-}
-
 // validate by using validator
 func validate(obj any) error {
-	of := reflect.ValueOf(obj)
-	switch of.Kind() {
-	case reflect.Pointer:
-		return validate(of.Elem().Interface())
-	case reflect.Struct:
-		return validateStruct(obj)
-	case reflect.Slice, reflect.Array:
-		cnt := of.Len()
-		sliceValidationError := make(SliceValidationError, 0)
-		for i := 0; i < cnt; i++ {
-			if err := validateStruct(of.Index(i).Interface()); err != nil {
-				sliceValidationError = append(sliceValidationError, err)
-			}
-		}
-		return sliceValidationError
-	}
-	return nil
-}
-
-// validateStruct is a method to handle the struct json param using validator utils
-func validateStruct(obj any) error {
-	return validator.New().Struct(obj)
+	return Validator.ValidateStruct(obj)
 }
 
 // validateParam check the json param's validation
