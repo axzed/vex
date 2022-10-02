@@ -46,11 +46,6 @@ func (b jsonBinding) Bind(r *http.Request, obj any) error {
 	return validate(obj)
 }
 
-// validate by using validator
-func validate(obj any) error {
-	return Validator.ValidateStruct(obj)
-}
-
 // validateParam check the json param's validation
 func validateParam(obj any, decoder *json.Decoder) error {
 	// parse to map, then compare by key of map and struct

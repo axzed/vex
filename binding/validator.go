@@ -91,3 +91,8 @@ func (d *defaultValidator) lazyInit() {
 		d.validate = validator.New()
 	})
 }
+
+// validate by using validator
+func validate(obj any) error {
+	return Validator.ValidateStruct(obj)
+}
