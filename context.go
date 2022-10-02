@@ -5,9 +5,8 @@
 package vex
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
+	"github.com/axzed/vex/binding"
 	"github.com/axzed/vex/render"
 	"html/template"
 	"io"
@@ -16,7 +15,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"reflect"
 	"strings"
 )
 
@@ -307,110 +305,47 @@ func (c *Context) Render(statusCode int, r render.Render) error {
 	return err
 }
 
-// DealJson is a method handle the json param
+// Bind checks the Method and Content-Type to select a binding engine automatically,
+// Depending on the "Content-Type" header different bindings are used, for example:
+//
+//	"application/json" --> JSON binding
+//	"application/xml"  --> XML binding
+//
+// It parses the request's body as JSON if Content-Type == "application/json" using JSON or XML as a JSON input.
+// It decodes the json payload into the struct specified as a pointer.
+// It writes a 400 error and sets Content-Type header "text/plain" in the response if input is not valid.
+
+// BindJSON is a shortcut for c.MustBindWith(obj, binding.JSON).
+// BindJSON is a method handle the json param
 // any means interface{}
-func (c *Context) DealJson(obj any) error {
-	// POST param in the body
-	body := c.R.Body
-	if body == nil {
-		return errors.New("invalid request!!!")
-	}
-	decoder := json.NewDecoder(body)
-	// if you have unknown fields in request param json, this will handle it
-	if c.DisallowUnknownFields {
-		decoder.DisallowUnknownFields()
-	}
-	if c.IsValid {
-		err := validateParam(obj, decoder)
-		if err != nil {
-			return err
-		}
-	} else {
-		err := decoder.Decode(obj)
-		if err != nil {
-			return err
-		}
-	}
-	return validate(obj)
+// use the binding to implement the method
+func (c *Context) BindJSON(obj any) error {
+	json := binding.JSON
+	json.DisallowUnknownFields = true
+	json.IsValid = true
+	return c.MustBindWith(obj, json)
 }
 
-// validate by using validator
-func validate(obj any) error {
-	return Validator.ValidateStruct(obj)
-}
-
-// validateParam check the json param's validation
-func validateParam(obj any, decoder *json.Decoder) error {
-	// parse to map, then compare by key of map and struct
-	// judge type by reflect
-	valueOf := reflect.ValueOf(obj)
-	// IsPointer ?
-	if valueOf.Kind() != reflect.Pointer {
-		return errors.New("This argumet must have a pointer type")
-	}
-	elem := valueOf.Elem().Interface()
-	of := reflect.ValueOf(elem)
-	// judge the type of value
-	switch of.Kind() {
-	case reflect.Struct:
-		return checkParam(of, obj, decoder)
-	case reflect.Slice, reflect.Array:
-		elem := of.Type().Elem()
-		if elem.Kind() == reflect.Struct {
-			return checkParamSlice(elem, obj, decoder)
-		}
-	default:
-		_ = decoder.Decode(obj)
+// MustBindWith binds the passed struct pointer using the specified binding engine.
+// It will abort the request with HTTP 400 if any error occurs.
+// See the binding package.
+func (c *Context) MustBindWith(obj any, bind binding.Binding) error {
+	if err := c.ShouldBind(obj, bind); err != nil {
+		c.W.WriteHeader(http.StatusBadRequest)
+		return err
 	}
 	return nil
 }
 
-// checkParamSlice is a method to handle the param in json and store in the slice or array
-func checkParamSlice(of reflect.Type, obj any, decoder *json.Decoder) error {
-	mapValue := make([]map[string]interface{}, 0)
-	_ = decoder.Decode(&mapValue)
-	for i := 0; i < of.NumField(); i++ {
-		field := of.Field(i)
-		name := field.Name
-		// get the json name by json tag and key
-		jsonName := field.Tag.Get("json")
-		if jsonName != "" {
-			name = jsonName
-		}
-		// self define the tag about vex framework
-		required := field.Tag.Get("vex")
-		for _, v := range mapValue {
-			value := v[name]
-			if value == nil && required == "required" {
-				return errors.New(fmt.Sprintf("filed [%s] is not exist, because [%s] is required", jsonName, jsonName))
-			}
-		}
-	}
-	b, _ := json.Marshal(mapValue)
-	_ = json.Unmarshal(b, obj)
-	return nil
-}
-
-// checkParam is a method handle the param by tag and check the validation of json param in request body
-func checkParam(of reflect.Value, obj any, decoder *json.Decoder) error {
-	mapValue := make(map[string]interface{})
-	_ = decoder.Decode(&mapValue)
-	for i := 0; i < of.NumField(); i++ {
-		field := of.Type().Field(i)
-		name := field.Name
-		// get the json name by json tag and key
-		jsonName := field.Tag.Get("json")
-		if jsonName != "" {
-			name = jsonName
-		}
-		// self define the tag about vex framework
-		required := field.Tag.Get("vex")
-		value := mapValue[name]
-		if value == nil && required == "required" {
-			return errors.New(fmt.Sprintf("filed [%s] is not exist, because [%s] is required", jsonName, jsonName))
-		}
-	}
-	b, _ := json.Marshal(mapValue)
-	_ = json.Unmarshal(b, obj)
-	return nil
+// ShouldBind checks the Method and Content-Type to select a binding engine automatically,
+// Depending on the "Content-Type" header different bindings are used, for example:
+//
+//	"application/json" --> JSON binding
+//	"application/xml"  --> XML binding
+//
+// It parses the request's body as JSON if Content-Type == "application/json" using JSON or XML as a JSON input.
+// It decodes the json payload into the struct specified as a pointer.
+// Like c.Bind() but this method does not set the response status code to 400 or abort if input is not valid.
+func (c *Context) ShouldBind(obj any, bind binding.Binding) error {
+	return bind.Bind(c.R, obj)
 }

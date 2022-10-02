@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-package vex
+package binding
 
 import (
 	"fmt"
@@ -66,6 +66,9 @@ func (d *defaultValidator) ValidateStruct(obj any) error {
 			if err := d.validateStruct(of.Index(i).Interface()); err != nil {
 				sliceValidationError = append(sliceValidationError, err)
 			}
+		}
+		if len(sliceValidationError) == 0 {
+			return nil
 		}
 		return sliceValidationError
 	}
