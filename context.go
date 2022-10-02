@@ -20,7 +20,7 @@ import (
 
 var defaultMaxMemory = 32 << 20 // 32M
 
-// Context is the most important part of gin. It allows us to pass variables between middleware,
+// Context is the most important part of vex framework. It allows us to pass variables between middleware,
 // manage the flow, validate the JSON of a request and render a JSON response for example
 type Context struct {
 	W                     http.ResponseWriter // response
@@ -30,6 +30,7 @@ type Context struct {
 	formCache             url.Values          // handle the query by HTML post
 	DisallowUnknownFields bool                // control the json fields in json
 	IsValid               bool                // control the json valid
+	StatusCode            int                 // get the request status code
 }
 
 // initQueryCache get the query param in request url
@@ -299,6 +300,7 @@ func (c *Context) String(status int, format string, values ...any) error {
 
 func (c *Context) Render(statusCode int, r render.Render) error {
 	err := r.Render(c.W)
+	c.StatusCode = statusCode
 	if statusCode != http.StatusOK {
 		c.W.WriteHeader(statusCode)
 	}
