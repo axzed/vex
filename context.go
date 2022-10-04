@@ -298,6 +298,7 @@ func (c *Context) String(status int, format string, values ...any) error {
 	return c.Render(status, &render.String{Format: format, Data: values})
 }
 
+// Render is a component to show the response to browser
 func (c *Context) Render(statusCode int, r render.Render) error {
 	err := r.Render(c.W)
 	c.StatusCode = statusCode
