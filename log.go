@@ -95,18 +95,24 @@ var defaultFormatter = func(params *LogFormatterParams) string {
 // LoggerWithConfig init the logger with the configuration
 func LoggerWithConfig(conf LoggerConfig, next HandleFunc) HandleFunc {
 	formatter := conf.Formatter
+	if formatter == nil {
+		formatter = defaultFormatter
+	}
 	out := conf.out
+	displayColor := false
 	if out == nil {
 		out = DefaultWriter
+		displayColor = true
 	}
 	if formatter == nil {
 		formatter = defaultFormatter
 	}
 	return func(ctx *Context) {
+		// get request from context's r
 		r := ctx.R
 		param := &LogFormatterParams{
 			Request:        r,
-			IsDisplayColor: true,
+			IsDisplayColor: displayColor,
 		}
 		// Start timer
 		start := time.Now()
