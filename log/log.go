@@ -52,6 +52,19 @@ func (l LoggerLevel) Level() string {
 // Fields to show the k-v msg
 type Fields map[string]any
 
+// LogFormatParam is a struct get the log's param
+type LogFormatParam struct {
+	Level          LoggerLevel
+	IsDisplayColor bool
+	LoggerFields   Fields // loggerFields
+	Msg            any
+}
+
+// LogFormatter is an interface to format print log
+type LogFormatter interface {
+	Format(param *LogFormatParam) string
+}
+
 // LoggerFormatter is the print format of your log
 type LoggerFormatter struct {
 	Level          LoggerLevel
@@ -61,10 +74,10 @@ type LoggerFormatter struct {
 
 // Logger is your log
 type Logger struct {
-	Formatter    LoggerFormatter // print format
-	Level        LoggerLevel     // log's level
-	Outs         []io.Writer     // output of log
-	LoggerFields Fields          // loggerFields
+	Formatter    LogFormatter // print format
+	Level        LoggerLevel  // log's level
+	Outs         []io.Writer  // output of log
+	LoggerFields Fields       // loggerFields
 }
 
 func New() *Logger {
@@ -79,7 +92,8 @@ func Default() *Logger {
 	logger := New()
 	logger.Level = LevelDebug
 	logger.Outs = append(logger.Outs, os.Stdout)
-	logger.Formatter = LoggerFormatter{}
+	// init with a default interface impl
+	logger.Formatter = &TextFormatter{}
 	return logger
 }
 
@@ -104,14 +118,19 @@ func (l *Logger) PrintLog(level LoggerLevel, msg any) {
 	if l.Level > level {
 		return
 	}
-	l.Formatter.Level = level
-	l.Formatter.LoggerFields = l.LoggerFields
-	str := l.Formatter.format(msg)
+	// init param
+	param := &LogFormatParam{
+		Level:        level,
+		LoggerFields: l.LoggerFields,
+		Msg:          msg,
+	}
+	// change the interface method
+	str := l.Formatter.Format(param)
 	for _, out := range l.Outs {
 		// if this log is a standard output in console set the color
 		if out == os.Stdout {
-			l.Formatter.IsDisplayColor = true
-			str = l.Formatter.format(msg)
+			param.IsDisplayColor = true
+			str = l.Formatter.Format(param)
 		}
 		fmt.Fprintln(out, str)
 	}
