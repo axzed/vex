@@ -2,9 +2,12 @@ package log
 
 import (
 	"fmt"
+	"github.com/axzed/vex/internal/vexstrings"
 	"io"
+	"log"
 	"os"
 	"path"
+	"strings"
 	"time"
 )
 
@@ -81,6 +84,7 @@ type Logger struct {
 	Outs         []*LoggerWriter // output of log
 	LoggerFields Fields          // loggerFields
 	LogPath      string
+	LogFileSize  int64 // the log's file size (user define)
 }
 
 // LoggerWriter write your log in correct way (level)
@@ -154,6 +158,8 @@ func (l *Logger) PrintLog(level LoggerLevel, msg any) {
 		// print log to the rel level file
 		if out.Level == -1 || level == out.Level {
 			fmt.Fprintln(out.Out, str)
+			// slice log when the size reach ta the size you set
+			l.CheckFileSize(out)
 		}
 	}
 }
@@ -190,16 +196,34 @@ func (l *Logger) SetLogPath(logPath string) {
 	})
 }
 
-// FileWriter to store the log file in 'name' file
-// return the writer to save the log file
-// it can create the file depend on different level of file
-// used by method SetLogPath
-func FileWriter(name string) io.Writer {
-	w, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		panic(err)
+// CheckFileSize to check the log file size whether reach to the top
+func (l *Logger) CheckFileSize(w *LoggerWriter) {
+	// turn the w to file
+	logFile := w.Out.(*os.File)
+	if logFile != nil {
+		stat, err := logFile.Stat()
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		size := stat.Size()
+		if l.LogFileSize <= 0 {
+			// default size setting
+			l.LogFileSize = 100 << 20 // 1024 * 1024 (100M)
+		}
+		// slice log file
+		if size >= l.LogFileSize {
+			// handle file name
+			_, name := path.Split(stat.Name())
+			fileName := name[0:strings.Index(name, ".")]
+			// recreate a file to save log
+			// splicing the log's writer name by using fileName
+			// add time to show
+			writer := FileWriter(path.Join(l.LogPath, vexstrings.JoinStrings(fileName, ".", time.Now().Unix(), ".log")))
+			// replace old writer
+			w.Out = writer
+		}
 	}
-	return w
 }
 
 func (f *LoggerFormatter) format(msg any) string {
@@ -249,4 +273,14 @@ func (f *LoggerFormatter) MsgColor() string {
 	}
 }
 
-
+// FileWriter to store the log file in 'name' file
+// return the writer to save the log file
+// it can create the file depend on different level of file
+// used by method SetLogPath
+func FileWriter(name string) io.Writer {
+	w, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		panic(err)
+	}
+	return w
+}
