@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"time"
 )
 
@@ -73,11 +74,19 @@ type LoggerFormatter struct {
 }
 
 // Logger is your log
+// core struct of log file
 type Logger struct {
-	Formatter    LogFormatter // print format
-	Level        LoggerLevel  // log's level
-	Outs         []io.Writer  // output of log
-	LoggerFields Fields       // loggerFields
+	Formatter    LogFormatter    // print format (form print your log)
+	Level        LoggerLevel     // log's level
+	Outs         []*LoggerWriter // output of log
+	LoggerFields Fields          // loggerFields
+	LogPath      string
+}
+
+// LoggerWriter write your log in correct way (level)
+type LoggerWriter struct {
+	Level LoggerLevel
+	Out   io.Writer // output of log
 }
 
 func New() *Logger {
@@ -91,8 +100,14 @@ func New() *Logger {
 func Default() *Logger {
 	logger := New()
 	logger.Level = LevelDebug
-	logger.Outs = append(logger.Outs, os.Stdout)
+	// set the default wirter
+	w := &LoggerWriter{
+		Level: LevelDebug,
+		Out:   os.Stdout,
+	}
+	logger.Outs = append(logger.Outs, w)
 	// init with a default interface impl
+	// the default formatter is TextFormatter (default impl of the interface formatter)
 	logger.Formatter = &TextFormatter{}
 	return logger
 }
@@ -113,6 +128,8 @@ func (l *Logger) Error(msg any) {
 }
 
 // PrintLog is a method to print the information of log
+// core method output the log's controller
+// if you need any logic control of log output you should code in this scope
 func (l *Logger) PrintLog(level LoggerLevel, msg any) {
 	// if level > print level do not print the log in the same level
 	if l.Level > level {
@@ -128,11 +145,16 @@ func (l *Logger) PrintLog(level LoggerLevel, msg any) {
 	str := l.Formatter.Format(param)
 	for _, out := range l.Outs {
 		// if this log is a standard output in console set the color
-		if out == os.Stdout {
+		if out.Out == os.Stdout {
 			param.IsDisplayColor = true
 			str = l.Formatter.Format(param)
+			fmt.Fprintln(out.Out, str)
 		}
-		fmt.Fprintln(out, str)
+		// level divide
+		// print log to the rel level file
+		if out.Level == -1 || level == out.Level {
+			fmt.Fprintln(out.Out, str)
+		}
 	}
 }
 
@@ -144,6 +166,40 @@ func (l *Logger) WithFields(fields Fields) *Logger {
 		Level:        l.Level,
 		LoggerFields: fields,
 	}
+}
+
+// SetLogPath to set the file path to save the log
+func (l *Logger) SetLogPath(logPath string) {
+	l.LogPath = logPath
+	// store the log file in different level
+	l.Outs = append(l.Outs, &LoggerWriter{
+		Level: -1,
+		Out:   FileWriter(path.Join(logPath, "all.log")),
+	})
+	l.Outs = append(l.Outs, &LoggerWriter{
+		Level: LevelDebug,
+		Out:   FileWriter(path.Join(logPath, "debug.log")),
+	})
+	l.Outs = append(l.Outs, &LoggerWriter{
+		Level: LevelInfo,
+		Out:   FileWriter(path.Join(logPath, "info.log")),
+	})
+	l.Outs = append(l.Outs, &LoggerWriter{
+		Level: LevelError,
+		Out:   FileWriter(path.Join(logPath, "error.log")),
+	})
+}
+
+// FileWriter to store the log file in 'name' file
+// return the writer to save the log file
+// it can create the file depend on different level of file
+// used by method SetLogPath
+func FileWriter(name string) io.Writer {
+	w, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		panic(err)
+	}
+	return w
 }
 
 func (f *LoggerFormatter) format(msg any) string {
@@ -192,3 +248,5 @@ func (f *LoggerFormatter) MsgColor() string {
 		return ""
 	}
 }
+
+
