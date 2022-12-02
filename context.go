@@ -7,6 +7,7 @@ package vex
 import (
 	"errors"
 	"github.com/axzed/vex/binding"
+	vexLog "github.com/axzed/vex/log"
 	"github.com/axzed/vex/render"
 	"html/template"
 	"io"
@@ -31,6 +32,7 @@ type Context struct {
 	DisallowUnknownFields bool                // control the json fields in json
 	IsValid               bool                // control the json valid
 	StatusCode            int                 // get the request status code
+	Logger                vexLog.Logger       // the logger in context (print the recover log)
 }
 
 // initQueryCache get the query param in request url
@@ -300,11 +302,13 @@ func (c *Context) String(status int, format string, values ...any) error {
 
 // Render is a component to show the response to browser
 func (c *Context) Render(statusCode int, r render.Render) error {
+	c.W.WriteHeader(statusCode)
 	err := r.Render(c.W)
 	c.StatusCode = statusCode
-	if statusCode != http.StatusOK {
-		c.W.WriteHeader(statusCode)
-	}
+	// **multi call WriteHeader** (need to fix)
+	//if statusCode != http.StatusOK {
+	//	c.W.WriteHeader(statusCode)
+	//}
 	return err
 }
 
@@ -356,4 +360,8 @@ func (c *Context) MustBindWith(obj any, bind binding.Binding) error {
 // Like c.Bind() but this method does not set the response status code to 400 or abort if input is not valid.
 func (c *Context) ShouldBind(obj any, bind binding.Binding) error {
 	return bind.Bind(c.R, obj)
+}
+
+func (c *Context) Fail(code int, msg string) {
+	c.String(code, msg)
 }

@@ -6,6 +6,7 @@ package vex
 
 import (
 	"fmt"
+	vexLog "github.com/axzed/vex/log"
 	"github.com/axzed/vex/render"
 	"html/template"
 	"log"
@@ -127,6 +128,7 @@ func (r *routerGroup) HEAD(name string, handleFunc HandleFunc, middlewareFunc ..
 // router defines a routerGroup's slice info
 type router struct {
 	routerGroups []*routerGroup // router's group
+	engine       *Engine
 }
 
 // Group grouping the routes
@@ -140,6 +142,7 @@ func (r *router) Group(name string) *routerGroup {
 		handlerMethodMap:   make(map[string][]string),
 		treeNode:           &treeNode{name: "/", children: make([]*treeNode, 0)},
 	}
+	routerGroup.Use(r.engine.middlewares...)
 	r.routerGroups = append(r.routerGroups, routerGroup)
 	return routerGroup
 }
@@ -148,9 +151,11 @@ func (r *router) Group(name string) *routerGroup {
 // Create an instance of Engine, by using New() or Default().
 type Engine struct {
 	*router
-	funcMap    template.FuncMap
-	HTMLRender render.HTMLRender
-	pool       sync.Pool
+	funcMap     template.FuncMap
+	HTMLRender  render.HTMLRender
+	pool        sync.Pool
+	Logger      *vexLog.Logger
+	middlewares []MiddlewareFunc
 }
 
 // New returns a new blank Engine instance without any middleware attached.
@@ -168,6 +173,16 @@ func New() *Engine {
 	engine.pool.New = func() any {
 		return engine.allocateContext() // set context into pool to improve efficient
 	}
+	return engine
+}
+
+// Default return an instance of Engine by setting Default handler
+// Default method combine the use of logger && recover
+func Default() *Engine {
+	engine := New()
+	engine.Logger = vexLog.Default()
+	engine.Use(Logger, Recovery)
+	engine.router.engine = engine
 	return engine
 }
 
@@ -200,6 +215,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := e.pool.Get().(*Context)
 	ctx.W = w
 	ctx.R = r
+	ctx.Logger = *e.Logger
 	e.httpRequestHandle(ctx, w, r)
 	e.pool.Put(ctx)
 }
@@ -247,4 +263,9 @@ func (e *Engine) Run() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+// Use is a method to use the default setting about logger and recovery
+func (e *Engine) Use(middlewares ...MiddlewareFunc) {
+	e.middlewares = middlewares
 }
