@@ -215,7 +215,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := e.pool.Get().(*Context)
 	ctx.W = w
 	ctx.R = r
-	ctx.Logger = *e.Logger
+	ctx.Logger = e.Logger
 	e.httpRequestHandle(ctx, w, r)
 	e.pool.Put(ctx)
 }

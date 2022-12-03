@@ -26,12 +26,12 @@ func (t *TextFormatter) Format(param *LogFormatParam) string {
 		// set the color to level logger | error -> red	| info -> green | debug -> blue
 		levelColor := t.LevelColor(param.Level)
 		msgColor := t.MsgColor(param.Level)
-		return fmt.Sprintf("%s [vex] %s | %s%v%s | level %s %s %s | msg=%s %#v %s | %s %s %s",
+		return fmt.Sprintf("%s [vex] %s | %s%v%s | level %s %s %s | msg=%s %v %s | %s %s %s",
 			yellow, reset, blue, now.Format("2006/01/02 - 15:04:05"), reset,
 			levelColor, param.Level.Level(), reset, msgColor, param.Msg, reset, magenta, fieldsStr, reset,
 		)
 	}
-	return fmt.Sprintf("[vex] | %v | level=%s | msg=%#v | %s",
+	return fmt.Sprintf("[vex] | %v | level=%s | msg=%v | %s",
 		now.Format("2006/01/02 - 15:04:05"),
 		param.Level.Level(),
 		param.Msg,

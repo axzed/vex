@@ -32,7 +32,7 @@ type Context struct {
 	DisallowUnknownFields bool                // control the json fields in json
 	IsValid               bool                // control the json valid
 	StatusCode            int                 // get the request status code
-	Logger                vexLog.Logger       // the logger in context (print the recover log)
+	Logger                *vexLog.Logger      // the logger in context (print the recover log)
 }
 
 // initQueryCache get the query param in request url
