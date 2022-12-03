@@ -1,7 +1,9 @@
 package vex
 
 import (
+	"errors"
 	"fmt"
+	"github.com/axzed/vex/verror"
 	"net/http"
 	"runtime"
 	"strings"
@@ -27,6 +29,14 @@ func Recovery(next HandleFunc) HandleFunc {
 		// exec the recover logic
 		defer func() {
 			if err := recover(); err != nil {
+				err2 := err.(error)
+				if err2 != nil {
+					var vError *verror.VError
+					if errors.As(err2, &vError) {
+						vError.ExecResult()
+						return
+					}
+				}
 				// print the error's log to console
 				// 裸的err Msg
 				// ctx.Logger.Error(err)
