@@ -147,15 +147,20 @@ func (r *router) Group(name string) *routerGroup {
 	return routerGroup
 }
 
+// ErrorHandler is a type to handle error
+// int -> code , any -> msg
+type ErrorHandler func(err error) (int, any)
+
 // Engine is the framework's instance, it contains the muxer, middleware and configuration settings.
 // Create an instance of Engine, by using New() or Default().
 type Engine struct {
 	*router
-	funcMap     template.FuncMap
-	HTMLRender  render.HTMLRender
-	pool        sync.Pool
-	Logger      *vexLog.Logger
-	middlewares []MiddlewareFunc
+	funcMap      template.FuncMap
+	HTMLRender   render.HTMLRender
+	pool         sync.Pool
+	Logger       *vexLog.Logger
+	middlewares  []MiddlewareFunc
+	errorHandler ErrorHandler
 }
 
 // New returns a new blank Engine instance without any middleware attached.
@@ -268,4 +273,9 @@ func (e *Engine) Run() {
 // Use is a method to use the default setting about logger and recovery
 func (e *Engine) Use(middlewares ...MiddlewareFunc) {
 	e.middlewares = middlewares
+}
+
+// RegisterErrorHandler to register the handler in engine
+func (e *Engine) RegisterErrorHandler(handler ErrorHandler) {
+	e.errorHandler = handler
 }
