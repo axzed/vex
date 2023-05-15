@@ -21,13 +21,14 @@ type sig struct{}
 
 // Pool is a place to store the worker
 type Pool struct {
-	cap     int32         // pool's max size
-	running int32         // worker's count which is running
-	workers []*Worker     // idle worker in pool set in the pool
-	expire  time.Duration // work's expire time (beyond this time: need to clean it)
-	release chan sig      // release the resource (pool disable)
-	lock    sync.Mutex    // protect the pool's resource for worker
-	once    sync.Once     // only release once
+	cap         int32         // pool's max size
+	running     int32         // worker's count which is running
+	workers     []*Worker     // idle worker in pool set in the pool
+	expire      time.Duration // work's expire time (beyond this time: need to clean it)
+	release     chan sig      // release the resource (pool disable)
+	lock        sync.Mutex    // protect the pool's resource for worker
+	once        sync.Once     // only release once
+	workerCache sync.Pool     // workerCache to cache
 }
 
 func NewPool(cap int) (*Pool, error) {
@@ -50,6 +51,12 @@ func NewTimePool(cap int, expire int) (*Pool, error) {
 		release: make(chan sig, 1),
 		lock:    sync.Mutex{},
 		once:    sync.Once{},
+	}
+	p.workerCache.New = func() any {
+		return &Worker{
+			pool: p,
+			task: make(chan func(), 1),
+		}
 	}
 	// clean the idle worker in goroutine
 	go p.expireWorker()
@@ -123,13 +130,21 @@ func (p *Pool) GetWorker() *Worker {
 		p.lock.Unlock()
 		return w
 	}
+
 	// 3. if don't had idle worker, then new worker
 	if p.running < p.cap {
-		// new a worker
-		w := &Worker{
-			pool:     p,
-			task:     make(chan func(), 1),
-			lastTime: time.Time{},
+		c := p.workerCache.Get()
+		var w *Worker
+		// don't had any worker in workerCache you still need to create a new worker
+		if c == nil {
+			// new a worker
+			w = &Worker{
+				pool:     p,
+				task:     make(chan func(), 1),
+				lastTime: time.Time{},
+			}
+		} else {
+			w = c.(*Worker)
 		}
 		// run the worker
 		w.run()

@@ -21,6 +21,8 @@ func (w *Worker) run() {
 func (w *Worker) running() {
 	for f := range w.task {
 		if f == nil {
+			// put the worker to cache when task had done
+			w.pool.workerCache.Put(w)
 			return
 		}
 		f()
