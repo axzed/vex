@@ -270,6 +270,14 @@ func (e *Engine) Run() {
 	}
 }
 
+// RunTLS attaches the router to a http.Server and starts listening and serving HTTPS (secure) requests.
+func (e *Engine) RunTLS(addr, certFile, keyFile string) {
+	err := http.ListenAndServeTLS(addr, certFile, keyFile, e.Handler())
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 // Use is a method to use the default setting about logger and recovery
 func (e *Engine) Use(middlewares ...MiddlewareFunc) {
 	e.middlewares = middlewares
@@ -278,4 +286,8 @@ func (e *Engine) Use(middlewares ...MiddlewareFunc) {
 // RegisterErrorHandler to register the handler in engine
 func (e *Engine) RegisterErrorHandler(handler ErrorHandler) {
 	e.errorHandler = handler
+}
+
+func (e *Engine) Handler() http.Handler {
+	return e
 }
