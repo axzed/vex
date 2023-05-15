@@ -29,6 +29,7 @@ type Pool struct {
 	lock        sync.Mutex    // protect the pool's resource for worker
 	once        sync.Once     // only release once
 	workerCache sync.Pool     // workerCache to cache
+	cond        *sync.Cond    // cond is a condition variable, a rendezvous point for goroutines waiting for or announcing the occurrence of an event.
 }
 
 func NewPool(cap int) (*Pool, error) {
@@ -58,6 +59,8 @@ func NewTimePool(cap int, expire int) (*Pool, error) {
 			task: make(chan func(), 1),
 		}
 	}
+	// init the cond
+	p.cond = sync.NewCond(&p.lock)
 	// clean the idle worker in goroutine
 	go p.expireWorker()
 	return p, nil
@@ -151,20 +154,25 @@ func (p *Pool) GetWorker() *Worker {
 		return w
 	}
 	// 4. if running worker + idle worker > pool.size then block and wait the worker release
-	for {
-		p.lock.Lock()
-		idleWorkers := p.workers
-		n := len(idleWorkers) - 1
-		if n < 0 {
-			p.lock.Unlock()
-			continue
-		}
-		w := idleWorkers[n]
-		idleWorkers[n] = nil
-		p.workers = idleWorkers[:n]
+	return p.waitIdleWorker()
+}
+
+// waitIdleWorker to wait the idle worker
+func (p *Pool) waitIdleWorker() *Worker {
+	p.lock.Lock()
+	// wait the idle worker
+	p.cond.Wait()
+	idleWorkers := p.workers
+	n := len(idleWorkers) - 1
+	if n < 0 {
 		p.lock.Unlock()
-		return w
+		return p.waitIdleWorker()
 	}
+	w := idleWorkers[n]
+	idleWorkers[n] = nil
+	p.workers = idleWorkers[:n]
+	p.lock.Unlock()
+	return w
 }
 
 // incrTheRunningCount to increase the running worker's count
@@ -182,6 +190,8 @@ func (p *Pool) PutWorker(w *Worker) {
 	w.lastTime = time.Now()
 	p.lock.Lock()
 	p.workers = append(p.workers, w)
+	// notify the worker had been put to the pool
+	p.cond.Signal()
 	p.lock.Unlock()
 }
 
