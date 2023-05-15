@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 )
 
 var defaultMaxMemory = 32 << 20 // 32M
@@ -33,6 +34,26 @@ type Context struct {
 	IsValid               bool                // control the json valid
 	StatusCode            int                 // get the request status code
 	Logger                *vexLog.Logger      // the logger in context (print the recover log)
+	Keys                  map[string]any      // the key-value store for this context's lifetime
+	mu                    sync.RWMutex        // protect Keys concurrent read and write
+}
+
+// Set is used to store a new key/value pair exclusively for this context.
+func (c *Context) Set(key string, value any) {
+	c.mu.Lock()
+	if c.Keys == nil {
+		c.Keys = make(map[string]any)
+	}
+	c.Keys[key] = value
+	c.mu.Unlock()
+}
+
+// Get returns the value for the given key, ie: (value, true).
+func (c *Context) Get(key string) (value any, ok bool) {
+	c.mu.RLock()
+	value, ok = c.Keys[key]
+	c.mu.RUnlock()
+	return
 }
 
 // initQueryCache get the query param in request url

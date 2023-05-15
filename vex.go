@@ -280,7 +280,7 @@ func (e *Engine) RunTLS(addr, certFile, keyFile string) {
 
 // Use is a method to use the default setting about logger and recovery
 func (e *Engine) Use(middlewares ...MiddlewareFunc) {
-	e.middlewares = middlewares
+	e.middlewares = append(e.middlewares, middlewares...)
 }
 
 // RegisterErrorHandler to register the handler in engine
