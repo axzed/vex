@@ -21,15 +21,16 @@ type sig struct{}
 
 // Pool is a place to store the worker
 type Pool struct {
-	cap         int32         // pool's max size
-	running     int32         // worker's count which is running
-	workers     []*Worker     // idle worker in pool set in the pool
-	expire      time.Duration // work's expire time (beyond this time: need to clean it)
-	release     chan sig      // release the resource (pool disable)
-	lock        sync.Mutex    // protect the pool's resource for worker
-	once        sync.Once     // only release once
-	workerCache sync.Pool     // workerCache to cache
-	cond        *sync.Cond    // cond is a condition variable, a rendezvous point for goroutines waiting for or announcing the occurrence of an event.
+	cap          int32         // pool's max size
+	running      int32         // worker's count which is running
+	workers      []*Worker     // idle worker in pool set in the pool
+	expire       time.Duration // work's expire time (beyond this time: need to clean it)
+	release      chan sig      // release the resource (pool disable)
+	lock         sync.Mutex    // protect the pool's resource for worker
+	once         sync.Once     // only release once
+	workerCache  sync.Pool     // workerCache to cache
+	cond         *sync.Cond    // cond is a condition variable, a rendezvous point for goroutines waiting for or announcing the occurrence of an event.
+	PanicHandler func()
 }
 
 func NewPool(cap int) (*Pool, error) {
@@ -162,10 +163,30 @@ func (p *Pool) waitIdleWorker() *Worker {
 	p.lock.Lock()
 	// wait the idle worker
 	p.cond.Wait()
+
 	idleWorkers := p.workers
 	n := len(idleWorkers) - 1
 	if n < 0 {
 		p.lock.Unlock()
+		// new a worker when you cannot wait the idle worker
+		if p.running < p.cap {
+			c := p.workerCache.Get()
+			var w *Worker
+			// don't had any worker in workerCache you still need to create a new worker
+			if c == nil {
+				// new a worker
+				w = &Worker{
+					pool:     p,
+					task:     make(chan func(), 1),
+					lastTime: time.Time{},
+				}
+			} else {
+				w = c.(*Worker)
+			}
+			// run the worker
+			w.run()
+			return w
+		}
 		return p.waitIdleWorker()
 	}
 	w := idleWorkers[n]

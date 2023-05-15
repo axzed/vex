@@ -1,6 +1,7 @@
 package vpool
 
 import (
+	vexLog "github.com/axzed/vex/log"
 	"time"
 )
 
@@ -19,6 +20,20 @@ func (w *Worker) run() {
 
 // running is the function to run task in cycle
 func (w *Worker) running() {
+	// catch the panic by task
+	defer func() {
+		// handle some logic when panic happened
+		w.pool.decrTheRunningCount()
+		w.pool.workerCache.Put(w)
+		if err := recover(); err != nil {
+			if w.pool.PanicHandler != nil {
+				w.pool.PanicHandler()
+			} else {
+				vexLog.Default().Error(err)
+			}
+		}
+		w.pool.cond.Signal()
+	}()
 	for f := range w.task {
 		if f == nil {
 			// put the worker to cache when task had done
