@@ -81,25 +81,29 @@ func (p *Pool) expireWorker() {
 		idleWorkers := p.workers
 		n := len(idleWorkers) - 1
 		if n >= 0 {
+			var clearN = -1
 			for i, w := range idleWorkers {
 				// 没有过期
 				if time.Now().Sub(w.lastTime) <= p.expire {
 					break
 				}
 				// 要删除的下标
-				n = i
+				clearN = i
 				// put the nil to start the worker.running()
 				w.task <- nil
+				idleWorkers[i] = nil
 			}
-			// 删除过期的idleWorker
-			if n >= len(idleWorkers)-1 {
-				// 全部要删
-				p.workers = idleWorkers[:0]
-			} else {
-				// 删除部分
-				p.workers = idleWorkers[n+1:]
+			if clearN != -1 {
+				// 删除过期的idleWorker
+				if clearN >= len(idleWorkers)-1 {
+					// 全部要删
+					p.workers = idleWorkers[:0]
+				} else {
+					// 删除部分
+					p.workers = idleWorkers[clearN+1:]
+				}
+				fmt.Printf("cleaning expired workers done, running:%d, workers:%v \n", p.running, p.workers)
 			}
-			fmt.Printf("cleaning expired workers done, running:%d, workers:%v \n", p.running, p.workers)
 		}
 		p.lock.Unlock()
 	}
