@@ -8,6 +8,7 @@ import (
 type Accounts struct {
 	UnAuthHandler func(ctx *Context)
 	Users         map[string]string
+	Realm         string
 }
 
 // BasicAuth is the basic auth handler. It returns a 401 Unauthorized if the request is not authorized
@@ -39,6 +40,7 @@ func (a *Accounts) UnAuthHandlers(ctx *Context) {
 	if a.UnAuthHandler != nil {
 		a.UnAuthHandler(ctx)
 	} else {
+		ctx.W.Header().Set("WWW-Authenticate", a.Realm)
 		ctx.W.WriteHeader(http.StatusUnauthorized)
 	}
 }
