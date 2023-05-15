@@ -2,6 +2,7 @@ package vpool
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,7 +19,7 @@ var (
 // sig is signal empty struct
 type sig struct{}
 
-// Pool is a place to store the work
+// Pool is a place to store the worker
 type Pool struct {
 	cap     int32         // pool's max size
 	running int32         // worker's count which is running
@@ -40,6 +41,7 @@ func NewTimePool(cap int, expire int) (*Pool, error) {
 	if expire <= 0 {
 		return nil, ErrorInvalidExpireTime
 	}
+	// init the pool
 	p := &Pool{
 		cap:     int32(cap),
 		running: 0,
@@ -49,13 +51,47 @@ func NewTimePool(cap int, expire int) (*Pool, error) {
 		lock:    sync.Mutex{},
 		once:    sync.Once{},
 	}
-	go expireWorker()
+	// clean the idle worker in goroutine
+	go p.expireWorker()
 	return p, nil
 }
 
-// expireWorker clean the idle worker in a long time
-func expireWorker() {
-
+// expireWorker clean the expired idle workers
+func (p *Pool) expireWorker() {
+	// Do Regular cleaning expired idle worker
+	ticker := time.NewTicker(p.expire)
+	for range ticker.C {
+		// pool is closed, break
+		if p.IsClosed() {
+			break
+		}
+		p.lock.Lock()
+		// 循环空闲 worker，如果当前时间 - worker最后运行时间 > expire => 清理
+		idleWorkers := p.workers
+		n := len(idleWorkers) - 1
+		if n >= 0 {
+			for i, w := range idleWorkers {
+				// 没有过期
+				if time.Now().Sub(w.lastTime) <= p.expire {
+					break
+				}
+				// 要删除的下标
+				n = i
+				// put the nil to start the worker.running()
+				w.task <- nil
+			}
+			// 删除过期的idleWorker
+			if n >= len(idleWorkers)-1 {
+				// 全部要删
+				p.workers = idleWorkers[:0]
+			} else {
+				// 删除部分
+				p.workers = idleWorkers[n+1:]
+			}
+			fmt.Printf("cleaning expired workers done, running:%d, workers:%v \n", p.running, p.workers)
+		}
+		p.lock.Unlock()
+	}
 }
 
 // Submit the task
@@ -87,7 +123,7 @@ func (p *Pool) GetWorker() *Worker {
 		p.lock.Unlock()
 		return w
 	}
-	// 3. don't had idle worker, then new worker
+	// 3. if don't had idle worker, then new worker
 	if p.running < p.cap {
 		// new a worker
 		w := &Worker{
@@ -150,6 +186,7 @@ func (p *Pool) Release() {
 	})
 }
 
+// IsClosed to check the pool is closed
 func (p *Pool) IsClosed() bool {
 	return len(p.release) <= 0
 }
