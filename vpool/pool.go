@@ -113,9 +113,6 @@ func (p *Pool) Submit(task func()) error {
 	// get a worker in the pool, then exec it with the task
 	w := p.GetWorker()
 	w.task <- task
-
-	// add task you should increase the running worker's count
-	w.pool.incrTheRunningCount()
 	return nil
 }
 
@@ -124,10 +121,10 @@ func (p *Pool) Submit(task func()) error {
 func (p *Pool) GetWorker() *Worker {
 	// 1. get the worker in pool
 	// 2. if had idle worker just get it
+	p.lock.Lock()
 	idleWorkers := p.workers
 	n := len(idleWorkers) - 1
 	if n >= 0 {
-		p.lock.Lock()
 		w := idleWorkers[n]
 		idleWorkers[n] = nil
 		p.workers = idleWorkers[:n]
@@ -137,6 +134,8 @@ func (p *Pool) GetWorker() *Worker {
 
 	// 3. if don't had idle worker, then new worker
 	if p.running < p.cap {
+		p.lock.Unlock()
+		// get the worker in workerCache
 		c := p.workerCache.Get()
 		var w *Worker
 		// don't had any worker in workerCache you still need to create a new worker
@@ -154,6 +153,7 @@ func (p *Pool) GetWorker() *Worker {
 		w.run()
 		return w
 	}
+	p.lock.Unlock()
 	// 4. if running worker + idle worker > pool.size then block and wait the worker release
 	return p.waitIdleWorker()
 }
@@ -244,4 +244,14 @@ func (p *Pool) Restart() bool {
 	}
 	_ = <-p.release
 	return true
+}
+
+// Running to get the running worker's count
+func (p *Pool) Running() int {
+	return int(atomic.LoadInt32(&p.running))
+}
+
+// Free to get the free worker's count
+func (p *Pool) Free() int {
+	return int(p.cap - p.running)
 }

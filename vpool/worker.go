@@ -15,6 +15,8 @@ type Worker struct {
 // run is a method to run the Worker
 // start running
 func (w *Worker) run() {
+	// incr the running count of worker
+	w.pool.incrTheRunningCount()
 	go w.running()
 }
 
@@ -43,7 +45,5 @@ func (w *Worker) running() {
 		f()
 		// task ending worker become idle, need to return the worker to pool
 		w.pool.PutWorker(w)
-		// set task - 1
-		w.pool.decrTheRunningCount()
 	}
 }
