@@ -461,6 +461,29 @@ func (s *VexSession) SelectOne(data any, fields ...string) error {
 	return nil
 }
 
+// Delete 删除数据
+func (s *VexSession) Delete() (int64, error) {
+	// delete from tableName where xxx = ?
+	// 拼接delete语句
+	query := fmt.Sprintf("delete from %s ", s.tableName)
+	var sb strings.Builder
+	sb.WriteString(query)
+	sb.WriteString(s.whereParam.String())
+	query = sb.String()
+	s.db.logger.Info(query)
+
+	// prepare sql语句 用于后续的执行
+	stmt, err := s.db.db.Prepare(query)
+	if err != nil {
+		return 0, err
+	}
+	r, err := stmt.Exec(s.whereValues...)
+	if err != nil {
+		return 0, err
+	}
+	return r.RowsAffected()
+}
+
 // Where 条件查询语句字符串处理 where xxx = ?
 func (s *VexSession) Where(field string, value any) *VexSession {
 	// where xxx = ?
