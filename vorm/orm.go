@@ -170,12 +170,89 @@ func (s *VexSession) InsertBatch(data []any) (int64, int64, error) {
 	return id, affected, nil
 }
 
+// UpdateParam 链式调用更新多个数据的字段的值
+func (s *VexSession) UpdateParam(field string, value any) *VexSession {
+	// Update("age", 1).Update("name", "vex")
+	// update table set xxx = ?, xxx = ? where xxx = ?
+	// 当 s.updateParam 不为空时，需要拼接逗号
+	if s.updateParam.String() != "" {
+		s.updateParam.WriteString(",")
+	}
+	// 拼接sql语句
+	// 拼接字段名
+	s.updateParam.WriteString(field)
+	// 拼接占位符
+	s.updateParam.WriteString(" = ?")
+	// 拼接字段值
+	s.values = append(s.values, value)
+	return s
+}
+
+// UpdateMap 链式调用更新多个数据的字段的值(用map标识要更新的数据)
+// map[xxx] = ?
+func (s *VexSession) UpdateMap(data map[string]any) *VexSession {
+	// Update("age", 1).Update("name", "vex")
+	// update table set xxx = ?, xxx = ? where xxx = ?
+
+	// 遍历map 获取字段名和字段值
+	for k, v := range data {
+		// 当 s.updateParam 不为空时，需要拼接逗号
+		if s.updateParam.String() != "" {
+			s.updateParam.WriteString(",")
+		}
+		// 拼接sql语句
+		// 拼接字段名
+		s.updateParam.WriteString(k)
+		// 拼接占位符
+		s.updateParam.WriteString(" = ?")
+		// 拼接字段值
+		s.values = append(s.values, v)
+	}
+
+	return s
+}
+
 // Update 更新数据
 func (s *VexSession) Update(data ...any) (int64, int64, error) {
 	// update("age", 1) or update(user)
 	// update table set xxx = ?, xxx = ? where xxx = ?
-	if len(data) == 0 || len(data) > 2 {
+	if len(data) > 2 {
 		return -1, -1, errors.New("data is empty or data is too much")
+	}
+	// 当 data 为空时候，代表前面已经结果链式 update 对 sql 进行了处理
+	// 直接执行sql语句
+	if len(data) == 0 {
+		query := fmt.Sprintf("update %s set %s", s.tableName, s.updateParam.String())
+		// 拼接where条件
+		var sb strings.Builder
+		sb.WriteString(query)
+		sb.WriteString(s.whereParam.String())
+		query = sb.String()
+		// 打印sql语句
+		s.db.logger.Info(query)
+		// prepare sql语句 用于后续的执行
+		stmt, err := s.db.db.Prepare(query)
+		if err != nil {
+			return -1, -1, err
+		}
+		// 拼接where条件的值
+		s.values = append(s.values, s.whereValues...)
+		// 执行sql语句
+		r, err := stmt.Exec(s.values...)
+		if err != nil {
+			return -1, -1, err
+		}
+		id, err := r.LastInsertId()
+		if err != nil {
+			return -1, -1, err
+		}
+		// 影响的行数
+		affected, err := r.RowsAffected()
+		if err != nil {
+			return -1, -1, err
+		}
+
+		return id, affected, nil
 	}
 	single := true
 	if len(data) == 2 {
