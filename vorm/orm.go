@@ -117,6 +117,56 @@ func (s *VexSession) Insert(data any) (int64, int64, error) {
 	return id, affected, nil
 }
 
+// InsertBatch 批量插入数据
+func (s *VexSession) InsertBatch(data []any) (int64, int64, error) {
+	// insert into table (xxx, xxx) values (?, ?), (?, ?), (?, ?)
+	if len(data) == 0 {
+		return -1, -1, errors.New("data is empty")
+	}
+	// 获取处理数据(结构体)的字段名
+	s.fieldNames(data[0])
+	// 拼接sql语句
+	query := fmt.Sprintf("insert into %s (%s) values", s.tableName, strings.Join(s.fieldName, ","))
+	var sb strings.Builder
+	sb.WriteString(query)
+	// 拼接占位符
+	for index, _ := range data {
+		sb.WriteString("(")
+		sb.WriteString(strings.Join(s.placeHolder, ","))
+		sb.WriteString(")")
+		// 拼接逗号(不是最后一组数据)
+		if index < len(data)-1 {
+			sb.WriteString(",")
+		}
+	}
+	// batchValues 获取处理数据(结构体)的字段值
+	s.batchValues(data)
+	query = sb.String()
+	// 打印sql语句
+	s.db.logger.Info(query)
+	// prepare sql语句 用于后续的执行
+	stmt, err := s.db.db.Prepare(query)
+	if err != nil {
+		return -1, -1, err
+	}
+	// 执行sql语句
+	r, err := stmt.Exec(s.values...)
+	if err != nil {
+		return -1, -1, err
+	}
+	id, err := r.LastInsertId()
+	if err != nil {
+		return -1, -1, err
+	}
+	// 影响的行数
+	affected, err := r.RowsAffected()
+	if err != nil {
+		return -1, -1, err
+	}
+
+	return id, affected, nil
+}
+
 // filedNames 获取字段名
 func (s *VexSession) fieldNames(data any) {
 	// 获取传入的数据类型的反射类型和反射值
@@ -165,6 +215,49 @@ func (s *VexSession) fieldNames(data any) {
 		s.fieldName = append(s.fieldName, sqlTag)
 		s.placeHolder = append(s.placeHolder, "?")
 		s.values = append(s.values, vVar.Field(i).Interface())
+	}
+}
+
+// batchValues 获取处理数据(结构体)的字段值
+func (s *VexSession) batchValues(data []any) {
+	s.values = make([]any, 0)
+	for _, value := range data {
+		// 获取传入的数据类型的反射类型和反射值
+		t := reflect.TypeOf(value)
+		v := reflect.ValueOf(value)
+		// 要求传入的数据类型必须是指针类型 例如: *User
+		// 方便利用反射获取字段名和字段值
+		if t.Kind() != reflect.Pointer {
+			panic(errors.New("data type must be pointer"))
+		}
+		// 获取指针指向的类型
+		tVar := t.Elem()
+		vVar := v.Elem()
+
+		for i := 0; i < tVar.NumField(); i++ {
+			// 获取字段名
+			fieldName := tVar.Field(i).Name
+			// 解析 Tag
+			tag := tVar.Field(i).Tag
+			sqlTag := tag.Get("vorm")
+			// 没有设置vorm标签,则使用字段名默认匹配
+			if sqlTag == "" {
+				// UserName -> user_name
+				sqlTag = strings.ToLower(Name(fieldName))
+			} else {
+				// 若设置了vorm的auto_increment,则不需要插入
+				if strings.Contains(sqlTag, "auto_increment") {
+					// 自增长的主键id
+					continue
+				}
+			}
+			id := vVar.Field(i).Interface()
+			// 如果vorm标签中包含id,则判断是否是自增长的主键
+			if strings.ToLower(sqlTag) == "id" && IsAutoId(id) {
+				continue
+			}
+			s.values = append(s.values, vVar.Field(i).Interface())
+		}
 	}
 }
 
