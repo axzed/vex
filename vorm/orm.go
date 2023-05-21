@@ -2,16 +2,26 @@ package vorm
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
+	vexLog "github.com/axzed/vex/log"
+	"reflect"
+	"strings"
 	"time"
 )
 
 type VexDb struct {
-	db *sql.DB
+	db     *sql.DB        // db 维护一个数据库连接
+	logger *vexLog.Logger // logger 维护一个日志对象
+	Prefix string         // Prefix 维护一个表前缀
 }
 
 type VexSession struct {
-	db        *VexDb
-	tableName string
+	db          *VexDb   // db 维护一个数据库连接
+	tableName   string   // tableName 维护一个表名
+	fieldName   []string // fieldName 维护字段名
+	placeHolder []string // placeHolder 维护占位符
+	values      []any    // values 维护字段值
 }
 
 // Open 打开数据库连接,返回一个VexDb对象,用于操作数据库
@@ -23,7 +33,8 @@ func Open(driverName string, source string) *VexDb {
 		panic(err)
 	}
 	vexDb := &VexDb{
-		db: db,
+		db:     db,
+		logger: vexLog.Default(),
 	}
 	// 设置连接池 以下是vORM数据库连接池的默认配置
 	// 最大空闲连接数，默认不配置，是2个最大空闲连接
@@ -76,6 +87,129 @@ func (s *VexSession) Table(name string) *VexSession {
 }
 
 // Insert 插入数据
-func (s *VexSession) Insert(data any) {
+func (s *VexSession) Insert(data any) (int64, int64, error) {
 	// insert into table (xxx, xxx) values (?, ?)
+	s.fieldNames(data)
+	// 拼接sql语句
+	query := fmt.Sprintf("insert into %s (%s) values (%s)", s.tableName, strings.Join(s.fieldName, ","), strings.Join(s.placeHolder, ","))
+	// 打印sql语句
+	s.db.logger.Info(query)
+	// prepare sql语句 用于后续的执行
+	stmt, err := s.db.db.Prepare(query)
+	if err != nil {
+		return -1, -1, err
+	}
+	// 执行sql语句
+	r, err := stmt.Exec(s.values...)
+	if err != nil {
+		return -1, -1, err
+	}
+	id, err := r.LastInsertId()
+	if err != nil {
+		return -1, -1, err
+	}
+	// 影响的行数
+	affected, err := r.RowsAffected()
+	if err != nil {
+		return -1, -1, err
+	}
+
+	return id, affected, nil
+}
+
+// filedNames 获取字段名
+func (s *VexSession) fieldNames(data any) {
+	// 获取传入的数据类型的反射类型和反射值
+	t := reflect.TypeOf(data)
+	v := reflect.ValueOf(data)
+	// 要求传入的数据类型必须是指针类型 例如: *User
+	// 方便利用反射获取字段名和字段值
+	if t.Kind() != reflect.Pointer {
+		panic(errors.New("data type must be pointer"))
+	}
+	// 获取指针指向的类型
+	tVar := t.Elem()
+	vVar := v.Elem()
+	// 如果没有设置表名,则使用 prefix + 结构体 名作为表名
+	if s.tableName == "" {
+		s.tableName = s.db.Prefix + strings.ToLower(tVar.Name())
+	}
+
+	for i := 0; i < tVar.NumField(); i++ {
+		// 获取字段名
+		fieldName := tVar.Field(i).Name
+		// 解析 Tag
+		tag := tVar.Field(i).Tag
+		sqlTag := tag.Get("vorm")
+		// 没有设置vorm标签,则使用字段名默认匹配
+		if sqlTag == "" {
+			// UserName -> user_name
+			sqlTag = strings.ToLower(Name(fieldName))
+		} else {
+			// 若设置了vorm的auto_increment,则不需要插入
+			if strings.Contains(sqlTag, "auto_increment") {
+				// 自增长的主键id
+				continue
+			}
+			// 如果设置了vorm标签,则使用vorm标签匹配
+			// 如果vorm标签中包含逗号,则只取逗号之前的内容
+			if strings.Contains(sqlTag, ",") {
+				sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
+			}
+		}
+		id := vVar.Field(i).Interface()
+		// 如果vorm标签中包含id,则判断是否是自增长的主键
+		if strings.ToLower(sqlTag) == "id" && IsAutoId(id) {
+			continue
+		}
+		s.fieldName = append(s.fieldName, sqlTag)
+		s.placeHolder = append(s.placeHolder, "?")
+		s.values = append(s.values, vVar.Field(i).Interface())
+	}
+}
+
+// IsAutoId 判断是否是自增长的id主键
+func IsAutoId(id any) bool {
+	t := reflect.TypeOf(id)
+	v := reflect.ValueOf(id)
+	switch t.Kind() {
+	case reflect.Int64:
+		if v.Interface().(int64) <= 0 {
+			return true
+		}
+	case reflect.Int32:
+		if v.Interface().(int32) <= 0 {
+			return true
+		}
+	case reflect.Int:
+		if v.Interface().(int) <= 0 {
+			return true
+		}
+	default:
+		return false
+	}
+	return false
+}
+
+// Name 将驼峰命名转换为下划线命名 例如: UserName -> User_Name
+func Name(name string) string {
+	var names = name[:]
+	lastIndex := 0
+	var sb strings.Builder
+	for index, value := range names {
+		// 判断是否是大写字母
+		if value >= 65 && value <= 90 {
+			// 如果是第一个字母,则不需要添加下划线
+			if index == 0 {
+				continue
+			}
+			sb.WriteString(name[:index])
+			sb.WriteString("_")
+			lastIndex = index
+		}
+	}
+	if lastIndex != len(name)-1 {
+		sb.WriteString(name[lastIndex:])
+	}
+	return sb.String()
 }
