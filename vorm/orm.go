@@ -17,11 +17,14 @@ type VexDb struct {
 }
 
 type VexSession struct {
-	db          *VexDb   // db 维护一个数据库连接
-	tableName   string   // tableName 维护一个表名
-	fieldName   []string // fieldName 维护字段名
-	placeHolder []string // placeHolder 维护占位符
-	values      []any    // values 维护字段值
+	db          *VexDb          // db 维护一个数据库连接
+	tableName   string          // tableName 维护一个表名
+	fieldName   []string        // fieldName 维护字段名
+	placeHolder []string        // placeHolder 维护占位符
+	values      []any           // values 维护字段值
+	updateParam strings.Builder // updateParam 维护更新参数
+	whereParam  strings.Builder // whereParam 维护where条件参数
+	whereValues []any           // whereValues 维护where条件值
 }
 
 // Open 打开数据库连接,返回一个VexDb对象,用于操作数据库
@@ -165,6 +168,80 @@ func (s *VexSession) InsertBatch(data []any) (int64, int64, error) {
 	}
 
 	return id, affected, nil
+}
+
+// Update 更新数据
+func (s *VexSession) Update(data ...any) (int64, int64, error) {
+	// update("age", 1) or update(user)
+	// update table set xxx = ?, xxx = ? where xxx = ?
+	if len(data) == 0 || len(data) > 2 {
+		return -1, -1, errors.New("data is empty or data is too much")
+	}
+	single := true
+	if len(data) == 2 {
+		single = false
+	}
+	// update table set age = ?, name = ? where id = ?
+	if !single {
+		// 当 s.updateParam 为空时，不需要拼接逗号
+		if s.updateParam.String() != "" {
+			s.updateParam.WriteString(",")
+		}
+		// update("age", 1)
+		s.updateParam.WriteString(data[0].(string))
+		s.updateParam.WriteString(" = ? ")
+		s.values = append(s.values, data[1])
+	}
+	query := fmt.Sprintf("update %s set %s", s.tableName, s.updateParam.String())
+	// 拼接where条件
+	var sb strings.Builder
+	sb.WriteString(query)
+	sb.WriteString(s.whereParam.String())
+	query = sb.String()
+	// 打印sql语句
+	s.db.logger.Info(query)
+	// prepare sql语句 用于后续的执行
+	stmt, err := s.db.db.Prepare(query)
+	if err != nil {
+		return -1, -1, err
+	}
+	// 拼接where条件的值
+	s.values = append(s.values, s.whereValues...)
+	// 执行sql语句
+	r, err := stmt.Exec(s.values...)
+	if err != nil {
+		return -1, -1, err
+	}
+	id, err := r.LastInsertId()
+	if err != nil {
+		return -1, -1, err
+	}
+	// 影响的行数
+	affected, err := r.RowsAffected()
+	if err != nil {
+		return -1, -1, err
+	}
+
+	return id, affected, nil
+}
+
+// Where 条件查询语句字符串处理 where xxx = ?
+func (s *VexSession) Where(field string, value any) *VexSession {
+	// where xxx = ?
+	if s.whereParam.String() == "" {
+		// 第一次拼接where
+		s.whereParam.WriteString("where ")
+	} else {
+		// 拼接and
+		s.whereParam.WriteString("and ")
+	}
+	// 拼接字段名
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" = ")
+	s.whereParam.WriteString("? ")
+	// 拼接字段值
+	s.whereValues = append(s.whereValues, value)
+	return s
 }
 
 // filedNames 获取字段名
