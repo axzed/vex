@@ -77,10 +77,24 @@ func (d *VexDb) SetConnMaxIdleTime(time time.Duration) {
 }
 
 // New 创建 VexSession 使得数据操作在一个会话内
-func (d *VexDb) New() *VexSession {
-	return &VexSession{
+func (d *VexDb) New(data any) *VexSession {
+	m := &VexSession{
 		db: d,
 	}
+	// 获取传入的数据类型的反射类型和反射值
+	t := reflect.TypeOf(data)
+	// 要求传入的数据类型必须是指针类型 例如: *User
+	// 方便利用反射获取字段名和字段值
+	if t.Kind() != reflect.Pointer {
+		panic(errors.New("data type must be pointer"))
+	}
+	// 获取指针指向的类型
+	tVar := t.Elem()
+	// 如果没有设置表名,则使用 prefix + 结构体 名作为表名
+	if m.tableName == "" {
+		m.tableName = m.db.Prefix + strings.ToLower(tVar.Name())
+	}
+	return m
 }
 
 // Table 指定本次 Session 要操作的数据库表名
@@ -360,6 +374,91 @@ func (s *VexSession) Update(data ...any) (int64, int64, error) {
 	}
 
 	return id, affected, nil
+}
+
+// SelectOne 查询一条数据
+func (s *VexSession) SelectOne(data any, fields ...string) error {
+	t := reflect.TypeOf(data)
+	if t.Kind() != reflect.Ptr {
+		return errors.New("data must be a pointer")
+	}
+	// 默认查询字段是 *
+	fieldStr := "*"
+	if len(fields) > 0 {
+		// 传入了查询字段
+		fieldStr = strings.Join(fields, ",")
+	}
+	query := fmt.Sprintf("select %s from %s ", fieldStr, s.tableName)
+	// 拼接where条件
+	var sb strings.Builder
+	sb.WriteString(query)
+	sb.WriteString(s.whereParam.String())
+	query = sb.String()
+	s.db.logger.Info(query)
+
+	// prepare sql语句 用于后续的执行
+	stmt, err := s.db.db.Prepare(query)
+	if err != nil {
+		return err
+	}
+	rows, err := stmt.Query(s.whereValues...)
+	if err != nil {
+		return err
+	}
+
+	// 获取查询的字段名
+	columns, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+	// id username age
+	values := make([]any, len(columns))    // values是每个列的值，这里获取到byte里
+	fieldScan := make([]any, len(columns)) // fieldScan是每个scan的值，这里获取到[]interface{}里
+	// 将字段名和字段值对应起来
+	for i := range fieldScan {
+		fieldScan[i] = &values[i]
+	}
+
+	// 判断是否有数据
+	if rows.Next() {
+		// 扫描数据 将数据赋值给fieldScan
+		err := rows.Scan(fieldScan...)
+		if err != nil {
+			return err
+		}
+		// 将数据赋值给data
+		tVar := t.Elem()
+		vVar := reflect.ValueOf(data).Elem()
+		// 遍历字段名 获取字段名对应的值 并赋值给data
+		for i := 0; i < tVar.NumField(); i++ {
+			name := tVar.Field(i).Name              // 获取字段名
+			sqlTag := tVar.Field(i).Tag.Get("vorm") // 获取tag
+			// 判断tag是否为空
+			if sqlTag == "" {
+				// tag为空，将字段名转为小写 作为sql语句中的字段名 例如：id UserName Age 转为 id user_name age
+				sqlTag = strings.ToLower(Name(name))
+			} else {
+				// 如果tag不为空，判断是否有逗号
+				if strings.Contains(sqlTag, ",") {
+					// 有逗号，截取第一个逗号前的内容作为sql语句中的字段名
+					sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
+				}
+			}
+
+			// 遍历从数据库中查询出来的字段名 获取字段名对应的值 并赋值给data
+			for j, colName := range columns {
+				if sqlTag == colName {
+					target := values[j]                    // 获取字段名对应的值
+					targetValue := reflect.ValueOf(target) // 获取字段名对应的值的反射值
+					fieldType := tVar.Field(i).Type
+					// 类型转换
+					result := reflect.ValueOf(targetValue.Interface()).Convert(fieldType) // 将字段名对应的值的反射值转换为字段类型
+					vVar.Field(i).Set(result)                                             // 将字段名对应的值的反射值转换后的值赋值给data
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // Where 条件查询语句字符串处理 where xxx = ?
