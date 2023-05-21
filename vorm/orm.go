@@ -191,6 +191,66 @@ func (s *VexSession) Update(data ...any) (int64, int64, error) {
 		s.updateParam.WriteString(data[0].(string))
 		s.updateParam.WriteString(" = ? ")
 		s.values = append(s.values, data[1])
+	} else {
+		// data[0] 是结构体用来更新
+		updateData := data[0]
+		// 获取传入的数据类型的反射类型和反射值
+		t := reflect.TypeOf(updateData)
+		v := reflect.ValueOf(updateData)
+		// 要求传入的数据类型必须是指针类型 例如: *User
+		// 方便利用反射获取字段名和字段值
+		if t.Kind() != reflect.Pointer {
+			panic(errors.New("update data type must be pointer"))
+		}
+		// 获取指针指向的类型
+		tVar := t.Elem()
+		vVar := v.Elem()
+		// 如果没有设置表名,则使用 prefix + 结构体 名作为表名
+		if s.tableName == "" {
+			s.tableName = s.db.Prefix + strings.ToLower(tVar.Name())
+		}
+
+		// 遍历结构体的字段 获取字段名和字段值 拼接sql语句 例如: update table set age = ?, name = ? where id = ?
+		for i := 0; i < tVar.NumField(); i++ {
+			// 获取字段名
+			fieldName := tVar.Field(i).Name
+			// 解析 Tag
+			tag := tVar.Field(i).Tag
+			sqlTag := tag.Get("vorm")
+			// 没有设置vorm标签,则使用字段名默认匹配
+			if sqlTag == "" {
+				// UserName -> user_name
+				sqlTag = strings.ToLower(Name(fieldName))
+			} else {
+				// 若设置了vorm的auto_increment,则不需要插入
+				if strings.Contains(sqlTag, "auto_increment") {
+					// 自增长的主键id
+					continue
+				}
+				// 如果设置了vorm标签,则使用vorm标签匹配
+				// 如果vorm标签中包含逗号,则只取逗号之前的内容
+				if strings.Contains(sqlTag, ",") {
+					sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
+				}
+			}
+			id := vVar.Field(i).Interface()
+			// 如果vorm标签中包含id,则判断是否是自增长的主键
+			if strings.ToLower(sqlTag) == "id" && IsAutoId(id) {
+				continue
+			}
+			// 当 s.updateParam 不为空时，需要拼接逗号
+			if s.updateParam.String() != "" {
+				s.updateParam.WriteString(",")
+			}
+			// update(user) 传入的是结构体 例如: user := User{Id: 1, Age: 18, Name: "vex"}
+			// update table set age = ?, name = ? where id = ?
+			// 将字段名添加到对应的切片中
+			s.updateParam.WriteString(sqlTag)
+			// 拼接展位符
+			s.updateParam.WriteString(" = ? ")
+			// 将字段值添加到切片中
+			s.values = append(s.values, vVar.Field(i).Interface())
+		}
 	}
 	query := fmt.Sprintf("update %s set %s", s.tableName, s.updateParam.String())
 	// 拼接where条件
@@ -234,6 +294,25 @@ func (s *VexSession) Where(field string, value any) *VexSession {
 	} else {
 		// 拼接and
 		s.whereParam.WriteString("and ")
+	}
+	// 拼接字段名
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" = ")
+	s.whereParam.WriteString("? ")
+	// 拼接字段值
+	s.whereValues = append(s.whereValues, value)
+	return s
+}
+
+// Or 条件查询语句字符串处理 where xxx = ?
+func (s *VexSession) Or(field string, value any) *VexSession {
+	// where xxx = ?
+	if s.whereParam.String() == "" {
+		// 第一次拼接where
+		s.whereParam.WriteString("where ")
+	} else {
+		// 拼接and
+		s.whereParam.WriteString("or ")
 	}
 	// 拼接字段名
 	s.whereParam.WriteString(field)
