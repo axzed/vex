@@ -467,9 +467,6 @@ func (s *VexSession) Where(field string, value any) *VexSession {
 	if s.whereParam.String() == "" {
 		// 第一次拼接where
 		s.whereParam.WriteString("where ")
-	} else {
-		// 拼接and
-		s.whereParam.WriteString("and ")
 	}
 	// 拼接字段名
 	s.whereParam.WriteString(field)
@@ -480,22 +477,16 @@ func (s *VexSession) Where(field string, value any) *VexSession {
 	return s
 }
 
+// And 多条件查询语句字符串处理 and xxx = ?
+func (s *VexSession) And() *VexSession {
+	// 拼接and
+	s.whereParam.WriteString("and ")
+	return s
+}
+
 // Or 条件查询语句字符串处理 where xxx = ?
-func (s *VexSession) Or(field string, value any) *VexSession {
-	// where xxx = ?
-	if s.whereParam.String() == "" {
-		// 第一次拼接where
-		s.whereParam.WriteString("where ")
-	} else {
-		// 拼接and
-		s.whereParam.WriteString("or ")
-	}
-	// 拼接字段名
-	s.whereParam.WriteString(field)
-	s.whereParam.WriteString(" = ")
-	s.whereParam.WriteString("? ")
-	// 拼接字段值
-	s.whereValues = append(s.whereValues, value)
+func (s *VexSession) Or() *VexSession {
+	s.whereParam.WriteString("or ")
 	return s
 }
 
