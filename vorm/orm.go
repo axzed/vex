@@ -870,3 +870,94 @@ func Name(name string) string {
 	}
 	return sb.String()
 }
+
+// Exec 原生sql执行
+// 例如: INSERT INTO user (name, age) VALUES (?, ?) 传入的values为: "张三", 18
+func (s *VexSession) Exec(sql string, values ...any) (int64, error) {
+	// 预处理sql
+	stmt, err := s.db.db.Prepare(sql)
+	if err != nil {
+		return 0, err
+	}
+	// 执行sql values为可变参数 一般是插入或更新的数据 例如: INSERT INTO user (name, age) VALUES (?, ?)
+	r, err := stmt.Exec(values)
+	if err != nil {
+		return 0, err
+	}
+	// 判断sql类型 若为插入语句,则返回自增长的id
+	if strings.Contains(strings.ToLower(sql), "insert") {
+		// 获取自增长的id
+		return r.LastInsertId()
+	}
+	return r.RowsAffected()
+}
+
+// QueryRow 原生sql查询
+// 例如: SELECT * FROM user WHERE id = ? 传入的queryValues为: 1
+func (s *VexSession) QueryRow(sql string, data any, queryValues ...any) error {
+	// 获取传入的结构体类型
+	t := reflect.TypeOf(data)
+	stmt, err := s.db.db.Prepare(sql)
+	if err != nil {
+		return err
+	}
+	rows, err := stmt.Query(queryValues...)
+	if err != nil {
+		return err
+	}
+	columns, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+	// values 是每个列的值,这里获取到byte里
+	values := make([]any, len(columns))
+	// fieldsScan是每个列的地址
+	var fieldsScan = make([]any, len(columns))
+	for i := range fieldsScan {
+		// 将每个列的地址赋值给fieldsScan
+		fieldsScan[i] = &values[i]
+	}
+
+	// 判断是否有数据
+	if rows.Next() {
+		// 扫描数据 将数据赋值给fieldScan
+		err := rows.Scan(fieldsScan...)
+		if err != nil {
+			return err
+		}
+		// 将数据赋值给data
+		tVar := t.Elem()
+		vVar := reflect.ValueOf(data).Elem()
+		// 遍历字段名 获取字段名对应的值 并赋值给data
+		for i := 0; i < tVar.NumField(); i++ {
+			name := tVar.Field(i).Name              // 获取字段名
+			sqlTag := tVar.Field(i).Tag.Get("vorm") // 获取tag
+			// 判断tag是否为空
+			if sqlTag == "" {
+				// tag为空，将字段名转为小写 作为sql语句中的字段名 例如：id UserName Age 转为 id user_name age
+				sqlTag = strings.ToLower(Name(name))
+			} else {
+				// 如果tag不为空，判断是否有逗号
+				if strings.Contains(sqlTag, ",") {
+					// 有逗号，截取第一个逗号前的内容作为sql语句中的字段名
+					sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
+				}
+			}
+
+			// 遍历从数据库中查询出来的字段名 获取字段名对应的值 并赋值给data
+			for j, colName := range columns {
+				if sqlTag == colName {
+					target := values[j]                    // 获取字段名对应的值
+					targetValue := reflect.ValueOf(target) // 获取字段名对应的值的反射值
+					fieldType := tVar.Field(i).Type
+					// 类型转换
+					result := reflect.ValueOf(targetValue.Interface()).Convert(fieldType) // 将字段名对应的值的反射值转换为字段类型
+					vVar.Field(i).Set(result)                                             // 将字段名对应的值的反射值转换后的值赋值给data
+				}
+			}
+		}
+	}
+
+	return nil
+
+}
