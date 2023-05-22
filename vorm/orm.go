@@ -558,6 +558,68 @@ func (s *VexSession) Select(data any, fields ...string) ([]any, error) {
 	return result, nil
 }
 
+// Like 模糊查询
+func (s *VexSession) Like(field string, data any) *VexSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" like ?")
+
+	s.values = append(s.values, "%"+data.(string)+"%")
+	return s
+}
+
+// LikeRight 模糊查询 右匹配
+func (s *VexSession) LikeRight(field string, data any) *VexSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" like ?")
+
+	s.values = append(s.values, data.(string)+"%")
+	return s
+}
+
+func (s *VexSession) Group(field ...string) *VexSession {
+	s.whereParam.WriteString(" group by ")
+	s.whereParam.WriteString(strings.Join(field, ","))
+	return s
+}
+
+func (s *VexSession) OrderDesc(field ...string) *VexSession {
+	s.whereParam.WriteString(" order by ")
+	s.whereParam.WriteString(strings.Join(field, ","))
+	s.whereParam.WriteString(" desc ")
+	return s
+}
+
+func (s *VexSession) OrderAsc(field ...string) *VexSession {
+	s.whereParam.WriteString(" order by ")
+	s.whereParam.WriteString(strings.Join(field, ","))
+	s.whereParam.WriteString(" asc ")
+	return s
+}
+
+// Order // order by name asc,age desc
+func (s *VexSession) Order(field ...string) *VexSession {
+	s.whereParam.WriteString(" order by ")
+	size := len(field)
+	if size%2 != 0 {
+		panic("Order field must be 偶数")
+	}
+	for index, v := range field {
+		s.whereParam.WriteString(" ")
+		s.whereParam.WriteString(v)
+		s.whereParam.WriteString(" ")
+		if index%2 != 0 && index < len(field)-1 {
+			s.whereParam.WriteString(",")
+		}
+	}
+	return s
+}
+
 // Delete 删除数据
 func (s *VexSession) Delete() (int64, error) {
 	// delete from tableName where xxx = ?
