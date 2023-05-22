@@ -620,6 +620,65 @@ func (s *VexSession) Order(field ...string) *VexSession {
 	return s
 }
 
+// Count 聚合函数
+func (s *VexSession) Count(field string) (int64, error) {
+	return s.Aggregate("count", field)
+}
+
+// Sum 聚合函数
+func (s *VexSession) Sum(field string) (int64, error) {
+	return s.Aggregate("sum", field)
+}
+
+// Max 聚合函数
+func (s *VexSession) Max(field string) (int64, error) {
+	return s.Aggregate("max", field)
+}
+
+// Min 聚合函数
+func (s *VexSession) Min(field string) (int64, error) {
+	return s.Aggregate("min", field)
+}
+
+// Avg 聚合函数
+func (s *VexSession) Avg(field string) (int64, error) {
+	return s.Aggregate("avg", field)
+}
+
+// Aggregate 聚合函数 sum max min avg
+func (s *VexSession) Aggregate(funcName, field string) (int64, error) {
+	// select sum(field) from tableName where xxx = ?
+	// 拼接聚合函数 select sum(field) from tableName
+	var aggSb strings.Builder
+	aggSb.WriteString(funcName)
+	aggSb.WriteString("(")
+	aggSb.WriteString(field)
+	aggSb.WriteString(")")
+	// 拼接select语句
+	query := fmt.Sprintf("select %s from %s ", aggSb.String(), s.tableName)
+	// 拼接where语句
+	var sb strings.Builder
+	sb.WriteString(query)
+	sb.WriteString(s.whereParam.String())
+	s.db.logger.Info(sb.String())
+	// 执行sql
+	stmt, err := s.db.db.Prepare(sb.String())
+	if err != nil {
+		return 0, err
+	}
+	var result int64
+	row := stmt.QueryRow()
+	err = row.Err()
+	if err != nil {
+		return 0, err
+	}
+	err = row.Scan(&result)
+	if err != nil {
+		return 0, err
+	}
+	return result, nil
+}
+
 // Delete 删除数据
 func (s *VexSession) Delete() (int64, error) {
 	// delete from tableName where xxx = ?
