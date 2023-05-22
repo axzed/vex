@@ -461,6 +461,103 @@ func (s *VexSession) SelectOne(data any, fields ...string) error {
 	return nil
 }
 
+// Select 查询多行数据
+func (s *VexSession) Select(data any, fields ...string) ([]any, error) {
+	t := reflect.TypeOf(data)
+	if t.Kind() != reflect.Ptr {
+		return nil, errors.New("data must be a pointer")
+	}
+	// 默认查询字段是 *
+	fieldStr := "*"
+	if len(fields) > 0 {
+		// 传入了查询字段
+		fieldStr = strings.Join(fields, ",")
+	}
+	query := fmt.Sprintf("select %s from %s ", fieldStr, s.tableName)
+	// 拼接where条件
+	var sb strings.Builder
+	sb.WriteString(query)
+	sb.WriteString(s.whereParam.String())
+	query = sb.String()
+	s.db.logger.Info(query)
+
+	// prepare sql语句 用于后续的执行
+	stmt, err := s.db.db.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := stmt.Query(s.whereValues...)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取查询的字段名
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]any, 0)
+
+	// 判断是否有数据 (与单行查询不同的是，这里需要循环遍历所有的数据)
+	for {
+		if rows.Next() {
+			// 由于传入进来的是一个指针地址 如果每次赋值都是同一个地址
+			// 所以每次查询的时候都需要重新创建一个新的地址
+			data := reflect.New(t.Elem()).Interface()
+			// id username age
+			values := make([]any, len(columns))    // values是每个列的值，这里获取到byte里
+			fieldScan := make([]any, len(columns)) // fieldScan是每个scan的值，这里获取到[]interface{}里
+			// 将字段名和字段值对应起来
+			for i := range fieldScan {
+				fieldScan[i] = &values[i]
+			}
+			// 扫描数据 将数据赋值给fieldScan
+			err := rows.Scan(fieldScan...)
+			if err != nil {
+				return nil, err
+			}
+			// 将数据赋值给data
+			tVar := t.Elem()
+			vVar := reflect.ValueOf(data).Elem()
+			// 遍历字段名 获取字段名对应的值 并赋值给data
+			for i := 0; i < tVar.NumField(); i++ {
+				name := tVar.Field(i).Name              // 获取字段名
+				sqlTag := tVar.Field(i).Tag.Get("vorm") // 获取tag
+				// 判断tag是否为空
+				if sqlTag == "" {
+					// tag为空，将字段名转为小写 作为sql语句中的字段名 例如：id UserName Age 转为 id user_name age
+					sqlTag = strings.ToLower(Name(name))
+				} else {
+					// 如果tag不为空，判断是否有逗号
+					if strings.Contains(sqlTag, ",") {
+						// 有逗号，截取第一个逗号前的内容作为sql语句中的字段名
+						sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
+					}
+				}
+
+				// 遍历从数据库中查询出来的字段名 获取字段名对应的值 并赋值给data
+				for j, colName := range columns {
+					if sqlTag == colName {
+						target := values[j]                    // 获取字段名对应的值
+						targetValue := reflect.ValueOf(target) // 获取字段名对应的值的反射值
+						fieldType := tVar.Field(i).Type
+						// 类型转换
+						result := reflect.ValueOf(targetValue.Interface()).Convert(fieldType) // 将字段名对应的值的反射值转换为字段类型
+						vVar.Field(i).Set(result)                                             // 将字段名对应的值的反射值转换后的值赋值给data
+					}
+				}
+			}
+			// 将每次赋值好的data追加到result中
+			result = append(result, data)
+		} else {
+			break
+		}
+	}
+
+	return result, nil
+}
+
 // Delete 删除数据
 func (s *VexSession) Delete() (int64, error) {
 	// delete from tableName where xxx = ?
