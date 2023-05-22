@@ -18,6 +18,8 @@ type VexDb struct {
 
 type VexSession struct {
 	db          *VexDb          // db 维护一个数据库连接
+	tx          *sql.Tx         // tx 维护一个事务对象
+	beginTx     bool            // beginTx 维护一个是否开启事务的标志
 	tableName   string          // tableName 维护一个表名
 	fieldName   []string        // fieldName 维护字段名
 	placeHolder []string        // placeHolder 维护占位符
@@ -960,4 +962,38 @@ func (s *VexSession) QueryRow(sql string, data any, queryValues ...any) error {
 
 	return nil
 
+}
+
+// Begin 开启事务
+func (s *VexSession) Begin() error {
+	// 开启事务
+	tx, err := s.db.db.Begin()
+	if err != nil {
+		return err
+	}
+	// 将事务赋值给session的tx
+	s.tx = tx
+	// 将beginTx设置为true
+	s.beginTx = true
+	return nil
+}
+
+// Commit 提交事务
+func (s *VexSession) Commit() error {
+	err := s.tx.Commit()
+	if err != nil {
+		return err
+	}
+	s.beginTx = false
+	return nil
+}
+
+// Rollback 回滚事务
+func (s *VexSession) Rollback() error {
+	err := s.tx.Rollback()
+	if err != nil {
+		return err
+	}
+	s.beginTx = false
+	return nil
 }
