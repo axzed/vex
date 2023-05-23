@@ -18,12 +18,16 @@ type HTMLRender struct {
 }
 
 func (h *HTML) Render(w http.ResponseWriter, code int) error {
+	// 写入响应头
 	h.WriteContentType(w)
 	w.WriteHeader(code)
+	// 判断是否是模板
 	if h.IsTemplate {
+		// 执行模板
 		err := h.Template.ExecuteTemplate(w, h.Name, h.Data)
 		return err
 	}
+	// 写入响应体
 	_, err := w.Write(bytesconv.StringToBytes(h.Data.(string)))
 	return err
 }

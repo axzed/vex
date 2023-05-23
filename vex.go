@@ -5,6 +5,7 @@
 package vex
 
 import (
+	"errors"
 	"fmt"
 	vexLog "github.com/axzed/vex/log"
 	"github.com/axzed/vex/render"
@@ -262,12 +263,20 @@ func (e *Engine) httpRequestHandle(ctx *Context, w http.ResponseWriter, r *http.
 // Run attaches the router to a http.Server and starts listening and serving HTTP requests.
 // It is a shortcut for http.ListenAndServe(addr, router)
 // Note: this method will block the calling goroutine indefinitely unless an error happens.
-func (e *Engine) Run() {
+func (e *Engine) Run(port ...string) error {
 	http.Handle("/", e)
-	err := http.ListenAndServe(":8111", nil)
+	// 若端口号为空，则默认为8080
+	if len(port) == 0 {
+		port = append(port, ":8080")
+	}
+	if len(port) > 1 {
+		return errors.New("too many parameters")
+	}
+	err := http.ListenAndServe(port[0], nil)
 	if err != nil {
 		log.Fatal(err)
 	}
+	return nil
 }
 
 // RunTLS attaches the router to a http.Server and starts listening and serving HTTPS (secure) requests.
